@@ -40,7 +40,9 @@ dotnet test
 **The game:** open `game/project.godot` in Godot (.NET) and press Play (F5).
 
 Current controls: `1` residential, `2` commercial, `3` industrial, `4` road,
-`5` power line, `6` power plant, `0` bulldoze. Click or drag to place.
+`5` power line, `6` power plant, `0` bulldoze. Click to place one tile; drag to fill a rectangle (zones, bulldoze) or a
+straight line (road, power line); the cost shows while you drag, and Escape
+cancels.
 Zones without power are drawn dim. `Space` pauses; `-` and `=` set the
 speed (1x, 2x, 4x).
 

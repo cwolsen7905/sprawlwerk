@@ -22,7 +22,7 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | M5 | Save browser, Continue, autosave | M | none yet | blocked (needs save/load, G5) |
 | M6 | Toolbar replacing the key-only tool picker | M | none yet | held (P1) |
 | M7 | Credits and third-party asset list | S | none yet | blocked (no third-party assets yet) |
-| M8 | Colour-blind-safe zone and overlay palette | S | none yet | open |
+| M8 | Colour-blind-safe zone and overlay palette | S | none yet | done for tiles (overlays wait on overlays) |
 
 ## Gameplay
 
@@ -35,7 +35,7 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | G5 | Save and load, versioned format | L | none yet | held (P3) |
 | G6 | Demand and growth: buildings appear on zones | L | none yet | held (P4) |
 | G7 | Budget, taxes, network upkeep | L | none yet | held (P4) |
-| G8 | Rectangle and line drag with a cost preview | M | none yet | open |
+| G8 | Rectangle and line drag with a cost preview | M | none yet | done |
 | G9 | Query tool: click a tile to see what it is and why it is not growing | M | none yet | blocked (needs G6) |
 | G10 | Zone densities | M | none yet | blocked (needs G6) |
 
