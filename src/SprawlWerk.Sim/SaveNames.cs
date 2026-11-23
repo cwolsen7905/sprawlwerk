@@ -32,6 +32,13 @@ public static class SaveNames
     /// <summary>The file name for a typed name, or null if it cleans to nothing.</summary>
     public static string? ToFileName(string? typed) => Clean(typed) is { } name ? name + Extension : null;
 
+    /// <summary>
+    /// The scratch file a save is written to before it is renamed over the real
+    /// one, so a failed write never leaves a half-written save. It does not end
+    /// in <see cref="Extension"/>, so save lists never mistake it for a save.
+    /// </summary>
+    public static string TempFileName(string fileName) => fileName + ".tmp";
+
     /// <summary>The display name for a file name; null if it is not a save file.</summary>
     public static string? FromFileName(string fileName) =>
         fileName.EndsWith(Extension, StringComparison.OrdinalIgnoreCase) && fileName.Length > Extension.Length

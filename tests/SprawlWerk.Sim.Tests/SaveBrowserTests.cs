@@ -52,6 +52,15 @@ public class SaveNamesTests
     }
 
     [Fact]
+    public void The_temp_file_for_a_save_is_never_listed_as_a_save()
+    {
+        var temp = SaveNames.TempFileName("My City.json");
+        Assert.Equal("My City.json.tmp", temp);
+        Assert.NotEqual("My City.json", temp);
+        Assert.Null(SaveNames.FromFileName(temp));
+    }
+
+    [Fact]
     public void A_cleaned_name_cleans_to_itself()
     {
         var once = SaveNames.Clean("  Hello,   World! ")!;
