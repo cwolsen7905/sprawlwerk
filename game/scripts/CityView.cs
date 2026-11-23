@@ -160,6 +160,11 @@ public partial class CityView : Node2D
                 text, HorizontalAlignment.Left, -1, 14, color);
         }
 
+        if (_sim.Power.ZonesWithoutSupply > 0)
+            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 88),
+                Strings.PowerShort(_sim.Power.ZonesWithoutSupply, _sim.Power.Demand, _sim.Power.Supply),
+                HorizontalAlignment.Left, -1, 14, new Color("f2c46b"));
+
         if (_lastRefusal.Length > 0)
             DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 66),
                 _lastRefusal, HorizontalAlignment.Left, -1, 14, new Color("e86f5c"));

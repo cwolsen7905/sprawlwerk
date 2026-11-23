@@ -11,8 +11,13 @@ public sealed class PriceList
     /// <summary>Cost to clear one tile that is not already empty.</summary>
     public long Demolish { get; }
 
-    public PriceList(IReadOnlyDictionary<TileKind, long> build, long demolish)
+    /// <summary>Extra cost for each tile where a power line and a road meet.</summary>
+    public long LineCrossing { get; }
+
+    public PriceList(IReadOnlyDictionary<TileKind, long> build, long demolish, long lineCrossing = 0)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(lineCrossing);
+        LineCrossing = lineCrossing;
         ArgumentOutOfRangeException.ThrowIfNegative(demolish);
         _build = new long[Enum.GetValues<TileKind>().Length];
         foreach (var (kind, price) in build)
@@ -35,6 +40,8 @@ public sealed class PriceList
             [TileKind.Road] = 15,
             [TileKind.PowerLine] = 8,
             [TileKind.PowerPlant] = 4000,
+            [TileKind.RoadWithLine] = 23, // a road plus a line, when placed outright
         },
-        demolish: 2);
+        demolish: 2,
+        lineCrossing: 12);
 }

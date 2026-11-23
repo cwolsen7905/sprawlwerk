@@ -30,8 +30,8 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 |---|------|------|-------|--------|
 | G1 | Calendar (day, month, year) derived from ticks | S | none yet | done |
 | G2 | Pause and three speeds | S | none yet | done |
-| G3 | Power capacity: plants supply a limited amount, the player is told about shortfalls | M | none yet | held (P2) |
-| G4 | Power lines may cross roads, at a cost | S | none yet | held (P2) |
+| G3 | Power capacity: plants supply a limited amount, the player is told about shortfalls | M | none yet | done (placeholder numbers: 40 per plant, 1 per zoned tile) |
+| G4 | Power lines may cross roads, at a cost | S | none yet | done (crossing tile, extra fee per tile) |
 | G5 | Save and load, versioned format | L | none yet | held (P3) |
 | G6 | Demand and growth: buildings appear on zones | L | none yet | held (P4) |
 | G7 | Budget, taxes, network upkeep | L | none yet | held (P4) |
@@ -60,7 +60,7 @@ full set (settings, rebinding, UI scale) at once. Recommend (b): menus that
 sit over the debug view get rebuilt, and settings storage is worth designing
 once.
 
-**P2: power rules (G3, G4).** Capacity needs a number per plant and a per-zone
+**P2: power rules (G3, G4), decided: option (a).** Capacity needs a number per plant and a per-zone
 demand, which is a balance choice. Options: (a) one flat capacity per plant
 and one unit of demand per zoned tile, powered tiles chosen nearest the plant
 first; (b) data-defined plant types from the start; (c) keep the free

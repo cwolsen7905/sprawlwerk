@@ -35,9 +35,11 @@ public sealed record PlaceCommand(int X, int Y, int Width, int Height, TileKind 
             if (!map.InBounds(x, y)) continue;
             onMap++;
             var current = map[x, y].Kind;
-            if (current == Kind) continue;
+            var result = Resulting(current, Kind);
+            if (current == result) continue;
             changed++;
             cost += Kind == TileKind.Empty ? prices.Demolish : prices.Build(Kind);
+            if (result == TileKind.RoadWithLine && Kind != TileKind.RoadWithLine) cost += prices.LineCrossing;
         }
 
         if (onMap == 0) return CommandResult.Refuse(Refusal.OutOfBounds);
@@ -50,9 +52,20 @@ public sealed record PlaceCommand(int X, int Y, int Width, int Height, TileKind 
         for (int y = Y; y < Y + Height; y++)
         for (int x = X; x < X + Width; x++)
         {
-            if (map.InBounds(x, y)) map[x, y].Kind = Kind;
+            if (map.InBounds(x, y)) map[x, y].Kind = Resulting(map[x, y].Kind, Kind);
         }
     }
+
+    /// <summary>
+    /// A line over a road, or a road over a line, makes a crossing instead of
+    /// replacing what was there; anything else simply becomes the new kind.
+    /// </summary>
+    private static TileKind Resulting(TileKind current, TileKind placed) => (current, placed) switch
+    {
+        (TileKind.Road or TileKind.RoadWithLine, TileKind.PowerLine) => TileKind.RoadWithLine,
+        (TileKind.PowerLine or TileKind.RoadWithLine, TileKind.Road) => TileKind.RoadWithLine,
+        _ => placed,
+    };
 }
 
 /// <summary>Return a rectangle of tiles to empty land.</summary>

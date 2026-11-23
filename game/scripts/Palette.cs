@@ -19,6 +19,7 @@ public static class Palette
         TileKind.Industrial => new Color("f0e442"),  // yellow
         TileKind.Road => new Color("4a505c"),        // neutral grey
         TileKind.PowerLine => new Color("cc79a7"),   // reddish purple
+        TileKind.RoadWithLine => new Color("7f6890"), // road grey tinted with the line purple
         TileKind.PowerPlant => new Color("d55e00"),  // vermillion
         _ => Ground,
     };

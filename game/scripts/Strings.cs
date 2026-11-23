@@ -20,6 +20,9 @@ public static class Strings
     public static string Hud(long funds, string tool, string date, int powered, string speed) =>
         $"Funds: ${funds:N0}    Tool: {tool}    {date}    Speed: {speed}    Powered tiles: {powered}";
 
+    public static string PowerShort(int zones, long demand, long supply) =>
+        $"Power short: {zones} zones dark (demand {demand}, supply {supply}); build another plant";
+
     public static string NeedsFunds(long cost) => $"needs ${cost:N0}, not enough funds";
     public static string Cost(long cost) => $"Here: ${cost:N0}";
     public static string Here(string why) => $"Here: {why}";

@@ -50,7 +50,9 @@ speed (1x, 2x, 4x).
 
 - Tile map with zones, roads, power lines and plants
 - Command queue applied on fixed simulation ticks
-- Power grid: flood fill from plants through lines and zones
+- Power grid: flood fill from plants through lines and zones; each plant has a
+  capacity, and when a network is over it the zones farthest from a plant go dark
+- Power lines can cross roads (for a fee); a plain road still blocks power
 - A minimal title menu and pause menu
 - A calendar derived from ticks, pause and three speeds
 - Isometric debug view in Godot with tile picking

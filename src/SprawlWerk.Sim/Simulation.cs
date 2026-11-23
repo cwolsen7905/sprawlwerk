@@ -35,11 +35,11 @@ public sealed class Simulation
     /// <summary>Every command applied or refused in the last <see cref="Step"/>, in order.</summary>
     public IReadOnlyList<CommandOutcome> LastOutcomes => _lastOutcomes;
 
-    public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null)
+    public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null, PowerRules? power = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(startingFunds);
         Map = new CityMap(width, height);
-        Power = new PowerGrid(width, height);
+        Power = new PowerGrid(width, height, power);
         Funds = startingFunds;
         Prices = prices ?? PriceList.Default;
     }
