@@ -10,7 +10,9 @@ namespace SprawlWerk;
 /// before the rendering does.
 ///
 /// Controls: 1 residential, 2 commercial, 3 industrial, 4 road,
-/// 5 power line, 6 power plant, 0 bulldoze. Left-click or drag to place.
+/// 5 power line, 6 power plant, 0 bulldoze. Left-click places one tile; drag to fill
+/// a rectangle (zones, bulldoze) or a straight line (road, power line), with the
+/// total cost shown while dragging. Escape cancels a drag.
 /// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
 /// accepted while paused and apply when time resumes.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
@@ -29,7 +31,7 @@ public partial class CityView : Node2D
     private double _tickAccumulator;
     private bool _paused;
     private int _speedIndex;
-    private bool _painting;
+    private Vector2I? _dragStart;
     private Vector2I? _hover;
     private string _lastRefusal = "";
 
@@ -58,7 +60,6 @@ public partial class CityView : Node2D
         if (hover != _hover)
         {
             _hover = hover;
-            if (_painting && hover is { } t) Place(t);
         }
 
         QueueRedraw();
@@ -69,12 +70,19 @@ public partial class CityView : Node2D
         switch (@event)
         {
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
-                _painting = mb.Pressed;
-                if (mb.Pressed && ScreenToTile(GetLocalMousePosition()) is { } tile) Place(tile);
+                if (mb.Pressed)
+                    _dragStart = ScreenToTile(GetLocalMousePosition());
+                else if (_dragStart is { } start)
+                {
+                    // Released off the map: use the last tile the cursor was over.
+                    if ((ScreenToTile(GetLocalMousePosition()) ?? _hover) is { } end) Place(start, end);
+                    _dragStart = null;
+                }
                 break;
 
             case InputEventKey { Pressed: true, Echo: false } key:
-                if (key.Keycode == Key.Space) _paused = !_paused;
+                if (key.Keycode == Key.Escape) _dragStart = null;
+                else if (key.Keycode == Key.Space) _paused = !_paused;
                 else if (key.Keycode == Key.Minus) _speedIndex = Mathf.Max(0, _speedIndex - 1);
                 else if (key.Keycode == Key.Equal) _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1);
 
@@ -106,8 +114,9 @@ public partial class CityView : Node2D
             DrawTile(x, y, map[x, y]);
         }
 
-        if (_hover is { } h)
-            DrawPolyline(Diamond(h.X, h.Y, close: true), Colors.White, 1.5f);
+        var preview = PreviewCommand();
+        if (preview is PlaceCommand pc) DrawArea(pc.X, pc.Y, pc.Width, pc.Height);
+        else if (preview is BulldozeCommand bc) DrawArea(bc.X, bc.Y, bc.Width, bc.Height);
 
         var hudOrigin = -Position + new Vector2(16, 28);
         DrawString(ThemeDB.FallbackFont, hudOrigin,
@@ -118,9 +127,9 @@ public partial class CityView : Node2D
             $"{Strings.ToolHelp}    {Strings.TimeHelp}",
             HorizontalAlignment.Left, -1, 14, new Color(1, 1, 1, 0.6f));
 
-        if (_hover is { } q)
+        if (preview is not null)
         {
-            var quote = _sim.Quote(CommandFor(q));
+            var quote = _sim.Quote(preview);
             var (text, color) = quote.Accepted
                 ? (Strings.Cost(quote.Cost), Colors.White)
                 : (Strings.Here(Describe(quote)), new Color("f2a07b"));
@@ -133,7 +142,7 @@ public partial class CityView : Node2D
                 _lastRefusal, HorizontalAlignment.Left, -1, 14, new Color("e86f5c"));
     }
 
-    // Drag painting re-sends tiles that are already done; only real problems are shown.
+    // Re-sent areas that are already built are not worth showing; only real problems are.
     private void NoteRefusals()
     {
         foreach (var outcome in _sim.LastOutcomes)
@@ -171,15 +180,29 @@ public partial class CityView : Node2D
         DrawPolyline(Diamond(x, y, close: true), new Color(0, 0, 0, 0.25f), 1f);
     }
 
-    private void Place(Vector2I tile)
+    private void Place(Vector2I from, Vector2I to)
     {
         _lastRefusal = "";
-        _sim.Enqueue(CommandFor(tile));
+        _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
     }
 
-    private ICommand CommandFor(Vector2I tile) => _tool == TileKind.Empty
-        ? new BulldozeCommand(tile.X, tile.Y)
-        : new PlaceCommand(tile.X, tile.Y, _tool);
+    // What the tool would do now: the whole drag if one is under way, else the hovered tile.
+    private ICommand? PreviewCommand()
+    {
+        if (_hover is not { } h) return null;
+        var from = _dragStart ?? h;
+        return Drag.Command(_tool, from.X, from.Y, h.X, h.Y);
+    }
+
+    private void DrawArea(int x, int y, int w, int h)
+    {
+        for (int ty = y; ty < y + h; ty++)
+        for (int tx = x; tx < x + w; tx++)
+        {
+            if (!_sim.Map.InBounds(tx, ty)) continue;
+            DrawPolyline(Diamond(tx, ty, close: true), Colors.White, 1.5f);
+        }
+    }
 
     private void SeedDemoCity()
     {
