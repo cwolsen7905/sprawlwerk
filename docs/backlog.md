@@ -19,7 +19,7 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | M2 | Title screen and main menu | L | none yet | minimal shell done (New city, Quit); splash and 3D backdrop later |
 | M3 | Pause menu, unsaved-changes prompt, settings (video, audio, controls, UI scale) | L | none yet | pause overlay done (Resume, Quit); prompt and settings open |
 | M4 | New-city setup and loading screen | M | none yet | blocked (map sizes undecided) |
-| M5 | Save browser, Continue, autosave | M | none yet | open (save/load exists) |
+| M5 | Save browser, Continue, autosave | M | none yet | browser done (Load on title, Save on pause: list, name field, overwrite confirm, delete, clear errors); Continue and autosave open |
 | M6 | Toolbar replacing the key-only tool picker | M | none yet | held (P1) |
 | M7 | Credits and third-party asset list | S | none yet | blocked (no third-party assets yet) |
 | M8 | Colour-blind-safe zone and overlay palette | S | none yet | done for tiles (overlays wait on overlays) |

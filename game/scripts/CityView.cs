@@ -15,7 +15,7 @@ namespace SprawlWerk;
 /// total cost shown while dragging. Escape cancels a drag (see <see cref="CancelDrag"/>).
 /// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
 /// accepted while paused and apply when time resumes.
-/// F5 quick-saves and F9 quick-loads one slot (a stand-in until there is a save browser).
+/// F5 quick-saves and F9 quick-loads one slot; named saves go through the shell menu's save browser.
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
 /// </summary>
@@ -51,11 +51,25 @@ public partial class CityView : Node2D
 
     private const string QuickSavePath = "user://quicksave.json";
 
+    /// <summary>The city as save text.</summary>
+    public string SaveToJson() => SaveGame.Serialize(_sim);
+
+    /// <summary>Replace the city with a saved one.</summary>
+    /// <exception cref="SaveFormatException">The save is damaged or from a newer game; the current city is kept.</exception>
+    public void LoadFromJson(string json)
+    {
+        _sim = SaveGame.Deserialize(json);
+        _tickAccumulator = 0;
+        _dragStart = null;
+        _lastRefusal = "";
+        _notice = Strings.Loaded;
+    }
+
     private void QuickSave()
     {
         using var file = Godot.FileAccess.Open(QuickSavePath, Godot.FileAccess.ModeFlags.Write);
         if (file is null) { _lastRefusal = Strings.SaveFailed; return; }
-        file.StoreString(SaveGame.Serialize(_sim));
+        file.StoreString(SaveToJson());
         _lastRefusal = "";
         _notice = Strings.Saved;
     }
@@ -65,17 +79,12 @@ public partial class CityView : Node2D
         if (!Godot.FileAccess.FileExists(QuickSavePath)) { _lastRefusal = Strings.NoSave; return; }
         try
         {
-            _sim = SaveGame.Deserialize(Godot.FileAccess.GetFileAsString(QuickSavePath));
+            LoadFromJson(Godot.FileAccess.GetFileAsString(QuickSavePath));
         }
         catch (SaveFormatException e)
         {
             _lastRefusal = Strings.LoadFailed(e.Message);
-            return;
         }
-        _tickAccumulator = 0;
-        _dragStart = null;
-        _lastRefusal = "";
-        _notice = Strings.Loaded;
     }
 
     /// <summary>Start over with an empty city.</summary>
