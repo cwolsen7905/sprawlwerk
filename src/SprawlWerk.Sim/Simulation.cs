@@ -44,6 +44,14 @@ public sealed class Simulation
         Prices = prices ?? PriceList.Default;
     }
 
+    /// <summary>Set the clock and rebuild derived state after a load; the map is already filled in.</summary>
+    internal void Restore(long tick)
+    {
+        Tick = tick;
+        Power.Recompute(Map);
+        _networksDirty = false;
+    }
+
     /// <summary>Queue a player action; it is applied at the start of the next tick.</summary>
     public void Enqueue(ICommand command) => _pending.Enqueue(command);
 
