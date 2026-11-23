@@ -11,6 +11,8 @@ namespace SprawlWerk;
 ///
 /// Controls: 1 residential, 2 commercial, 3 industrial, 4 road,
 /// 5 power line, 6 power plant, 0 bulldoze. Left-click or drag to place.
+/// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
+/// accepted while paused and apply when time resumes.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
 /// </summary>
 public partial class CityView : Node2D
@@ -22,7 +24,11 @@ public partial class CityView : Node2D
 
     private Simulation _sim = null!;
     private TileKind _tool = TileKind.Residential;
+    private static readonly int[] Speeds = [1, 2, 4];
+
     private double _tickAccumulator;
+    private bool _paused;
+    private int _speedIndex;
     private bool _painting;
     private Vector2I? _hover;
     private string _lastRefusal = "";
@@ -39,7 +45,8 @@ public partial class CityView : Node2D
     public override void _Process(double delta)
     {
         // Fixed-rate simulation ticks, independent of frame rate.
-        _tickAccumulator += delta;
+        // Speed only changes how fast time is fed in; each tick is the same.
+        if (!_paused) _tickAccumulator += delta * Speeds[_speedIndex];
         while (_tickAccumulator >= SecondsPerTick)
         {
             _sim.Step();
@@ -67,6 +74,10 @@ public partial class CityView : Node2D
                 break;
 
             case InputEventKey { Pressed: true, Echo: false } key:
+                if (key.Keycode == Key.Space) _paused = !_paused;
+                else if (key.Keycode == Key.Minus) _speedIndex = Mathf.Max(0, _speedIndex - 1);
+                else if (key.Keycode == Key.Equal) _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1);
+
                 _tool = key.Keycode switch
                 {
                     Key.Key1 => TileKind.Residential,
@@ -100,18 +111,19 @@ public partial class CityView : Node2D
 
         var hudOrigin = -Position + new Vector2(16, 28);
         DrawString(ThemeDB.FallbackFont, hudOrigin,
-            $"Funds: ${_sim.Funds:N0}    Tool: {_tool}    Tick: {_sim.Tick}    Powered tiles: {_sim.PoweredTiles}",
+            Strings.Hud(_sim.Funds, _tool.ToString(), _sim.Date.ToString(), _sim.PoweredTiles,
+                _paused ? Strings.Paused : $"{Speeds[_speedIndex]}x"),
             HorizontalAlignment.Left, -1, 16, Colors.White);
         DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 22),
-            "1 Res  2 Com  3 Ind  4 Road  5 Line  6 Plant  0 Bulldoze",
+            $"{Strings.ToolHelp}    {Strings.TimeHelp}",
             HorizontalAlignment.Left, -1, 14, new Color(1, 1, 1, 0.6f));
 
         if (_hover is { } q)
         {
             var quote = _sim.Quote(CommandFor(q));
             var (text, color) = quote.Accepted
-                ? ($"Here: ${quote.Cost:N0}", Colors.White)
-                : ($"Here: {Describe(quote)}", new Color("f2a07b"));
+                ? (Strings.Cost(quote.Cost), Colors.White)
+                : (Strings.Here(Describe(quote)), new Color("f2a07b"));
             DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 44),
                 text, HorizontalAlignment.Left, -1, 14, color);
         }
@@ -127,15 +139,15 @@ public partial class CityView : Node2D
         foreach (var outcome in _sim.LastOutcomes)
         {
             if (outcome.Result.Refusal is Refusal.None or Refusal.NothingToChange) continue;
-            _lastRefusal = $"Refused: {Describe(outcome.Result)}";
+            _lastRefusal = Strings.Refused(Describe(outcome.Result));
         }
     }
 
     private static string Describe(CommandResult r) => r.Refusal switch
     {
-        Refusal.InsufficientFunds => $"needs ${r.Cost:N0}, not enough funds",
-        Refusal.NothingToChange => "already built",
-        Refusal.OutOfBounds => "off the map",
+        Refusal.InsufficientFunds => Strings.NeedsFunds(r.Cost),
+        Refusal.NothingToChange => Strings.AlreadyBuilt,
+        Refusal.OutOfBounds => Strings.OffTheMap,
         _ => r.Refusal.ToString(),
     };
 

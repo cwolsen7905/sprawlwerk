@@ -41,18 +41,21 @@ dotnet test
 
 Current controls: `1` residential, `2` commercial, `3` industrial, `4` road,
 `5` power line, `6` power plant, `0` bulldoze. Click or drag to place.
-Zones without power are drawn dim.
+Zones without power are drawn dim. `Space` pauses; `-` and `=` set the
+speed (1x, 2x, 4x).
 
 ## What works today
 
 - Tile map with zones, roads, power lines and plants
 - Command queue applied on fixed simulation ticks
 - Power grid: flood fill from plants through lines and zones
+- A calendar derived from ticks, pause and three speeds
 - Isometric debug view in Godot with tile picking
 
 ## Contributing
 
-Early days; issues and ideas are welcome. Run `dotnet test` before opening
+Early days; issues and ideas are welcome. Planned work is in
+[docs/backlog.md](docs/backlog.md). Run `dotnet test` before opening
 a pull request. CI runs the simulation tests on every push.
 
 ## License
