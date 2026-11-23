@@ -19,6 +19,9 @@ public static class Strings
     public const string NoSave = "No saved city yet (F5 saves)";
     public static string LoadFailed(string why) => $"Could not load: {why}";
     public const string MenuLoad = "Load";
+    public const string MenuContinue = "Continue";
+    public const string Autosaved = "Autosaved";
+    public static string AutosaveFailed(string why) => $"Autosave failed: {why}";
     public const string MenuSave = "Save";
     public const string MenuBack = "Back";
     public const string MenuDelete = "Delete";

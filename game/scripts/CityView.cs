@@ -15,6 +15,7 @@ namespace SprawlWerk;
 /// total cost shown while dragging. Escape cancels a drag (see <see cref="CancelDrag"/>).
 /// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
 /// accepted while paused and apply when time resumes.
+/// The city autosaves once a month into one slot (see <see cref="Autosave"/>).
 /// F5 quick-saves and F9 quick-loads one slot; named saves go through the shell menu's save browser.
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
@@ -65,6 +66,15 @@ public partial class CityView : Node2D
         _notice = Strings.Loaded;
     }
 
+    // Once a month, into the single autosave slot; a failure is shown and the game carries on.
+    private void AutosaveNow()
+    {
+        if (SaveStore.Write(Autosave.FileName, SaveToJson()) is { } problem)
+            _lastRefusal = Strings.AutosaveFailed(problem);
+        else
+            _notice = Strings.Autosaved;
+    }
+
     private void QuickSave()
     {
         if (SaveStore.WriteAtomic(QuickSavePath, SaveToJson()) is { } problem) { _lastRefusal = problem; return; }
@@ -112,8 +122,10 @@ public partial class CityView : Node2D
         if (Active && !_paused) _tickAccumulator += delta * Speeds[_speedIndex];
         while (_tickAccumulator >= SecondsPerTick)
         {
+            long before = _sim.Tick;
             _sim.Step();
             _tickAccumulator -= SecondsPerTick;
+            if (Autosave.IsDue(before, _sim.Tick)) AutosaveNow();
             NoteRefusals();
         }
 

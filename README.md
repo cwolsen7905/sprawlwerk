@@ -54,7 +54,7 @@ speed (1x, 2x, 4x).
   capacity, and when a network is over it the zones farthest from a plant go dark
 - Power lines can cross roads (for a fee); a plain road still blocks power
 - A minimal title menu and pause menu
-- Versioned JSON saves; a loaded city continues exactly as the saved one would
+- Versioned JSON saves, written atomically; monthly autosave and Continue on the title menu; a loaded city continues exactly as the saved one would
 - A calendar derived from ticks, pause and three speeds
 - Isometric debug view in Godot with tile picking
 
