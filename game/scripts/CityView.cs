@@ -67,9 +67,7 @@ public partial class CityView : Node2D
 
     private void QuickSave()
     {
-        using var file = Godot.FileAccess.Open(QuickSavePath, Godot.FileAccess.ModeFlags.Write);
-        if (file is null) { _lastRefusal = Strings.SaveFailed; return; }
-        file.StoreString(SaveToJson());
+        if (SaveStore.WriteAtomic(QuickSavePath, SaveToJson()) is { } problem) { _lastRefusal = problem; return; }
         _lastRefusal = "";
         _notice = Strings.Saved;
     }

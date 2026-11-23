@@ -53,9 +53,30 @@ public static class SaveStore
     public static string? Write(string fileName, string json)
     {
         DirAccess.MakeDirRecursiveAbsolute(Folder);
-        using var file = FileAccess.Open(PathFor(fileName), FileAccess.ModeFlags.Write);
-        if (file is null) return Strings.SaveFailed;
-        file.StoreString(json);
+        return WriteAtomic(PathFor(fileName), json);
+    }
+
+    /// <summary>
+    /// Write to a scratch file, then rename it over the real one, so a failed or
+    /// interrupted write never leaves a half-written save in place of a good one.
+    /// </summary>
+    /// <returns>null on success, otherwise what went wrong.</returns>
+    public static string? WriteAtomic(string path, string json)
+    {
+        var temp = SaveNames.TempFileName(path);
+        using (var file = FileAccess.Open(temp, FileAccess.ModeFlags.Write))
+        {
+            if (file is null) return Strings.SaveFailed;
+            bool stored = file.StoreString(json);
+            file.Close();
+            if (!stored) { DirAccess.RemoveAbsolute(temp); return Strings.SaveFailed; }
+        }
+
+        if (DirAccess.RenameAbsolute(temp, path) != Error.Ok)
+        {
+            DirAccess.RemoveAbsolute(temp);
+            return Strings.SaveFailed;
+        }
         return null;
     }
 
