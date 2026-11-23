@@ -36,12 +36,12 @@ public class SimulationTests
         sim.Enqueue(new PlaceCommand(1, 0, 4, 1, TileKind.PowerLine));
         sim.Enqueue(new PlaceCommand(5, 0, TileKind.Residential));
         sim.Step();
-        Assert.True(sim.Map[5, 0].Powered);
+        Assert.True(sim.Power.IsPowered(5, 0));
         Assert.Equal(6, sim.PoweredTiles);
 
         sim.Enqueue(new BulldozeCommand(3, 0));
         sim.Step();
-        Assert.False(sim.Map[5, 0].Powered);
+        Assert.False(sim.Power.IsPowered(5, 0));
         Assert.Equal(3, sim.PoweredTiles);
     }
 

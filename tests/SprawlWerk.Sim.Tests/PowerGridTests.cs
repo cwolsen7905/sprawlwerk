@@ -10,8 +10,9 @@ public class PowerGridTests
         var map = new CityMap(5, 5);
         map[2, 2].Kind = TileKind.PowerPlant;
 
-        Assert.Equal(1, PowerGrid.Recompute(map));
-        Assert.True(map[2, 2].Powered);
+        var grid = new PowerGrid(map.Width, map.Height);
+        Assert.Equal(1, grid.Recompute(map));
+        Assert.True(grid.IsPowered(2, 2));
     }
 
     [Fact]
@@ -23,11 +24,13 @@ public class PowerGridTests
         map[5, 0].Kind = TileKind.Residential;
         map[6, 0].Kind = TileKind.Residential; // zones conduct to each other
 
-        PowerGrid.Recompute(map);
+        var grid = new PowerGrid(map.Width, map.Height);
 
-        Assert.True(map[5, 0].Powered);
-        Assert.True(map[6, 0].Powered);
-        Assert.False(map[7, 0].Powered); // empty land
+        grid.Recompute(map);
+
+        Assert.True(grid.IsPowered(5, 0));
+        Assert.True(grid.IsPowered(6, 0));
+        Assert.False(grid.IsPowered(7, 0)); // empty land
     }
 
     [Fact]
@@ -40,11 +43,13 @@ public class PowerGridTests
         map[3, 0].Kind = TileKind.PowerLine;
         map[4, 0].Kind = TileKind.Commercial;
 
-        PowerGrid.Recompute(map);
+        var grid = new PowerGrid(map.Width, map.Height);
 
-        Assert.True(map[1, 0].Powered);
-        Assert.False(map[3, 0].Powered);
-        Assert.False(map[4, 0].Powered);
+        grid.Recompute(map);
+
+        Assert.True(grid.IsPowered(1, 0));
+        Assert.False(grid.IsPowered(3, 0));
+        Assert.False(grid.IsPowered(4, 0));
     }
 
     [Fact]
@@ -55,9 +60,11 @@ public class PowerGridTests
         map[1, 0].Kind = TileKind.Road;
         map[2, 0].Kind = TileKind.Industrial;
 
-        PowerGrid.Recompute(map);
+        var grid = new PowerGrid(map.Width, map.Height);
 
-        Assert.False(map[2, 0].Powered);
+        grid.Recompute(map);
+
+        Assert.False(grid.IsPowered(2, 0));
     }
 
     [Fact]
@@ -67,8 +74,10 @@ public class PowerGridTests
         map[0, 0].Kind = TileKind.PowerPlant;
         map[1, 1].Kind = TileKind.Residential;
 
-        PowerGrid.Recompute(map);
+        var grid = new PowerGrid(map.Width, map.Height);
 
-        Assert.False(map[1, 1].Powered);
+        grid.Recompute(map);
+
+        Assert.False(grid.IsPowered(1, 1));
     }
 }
