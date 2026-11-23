@@ -24,7 +24,10 @@ public sealed class Simulation
     /// <summary>Ticks elapsed since the city was founded.</summary>
     public long Tick { get; private set; }
 
-    public int PoweredTiles { get; private set; }
+    /// <summary>Which tiles have power; derived from <see cref="Map"/>, rebuilt when it changes.</summary>
+    public PowerGrid Power { get; }
+
+    public int PoweredTiles => Power.PoweredCount;
 
     /// <summary>Every command applied or refused in the last <see cref="Step"/>, in order.</summary>
     public IReadOnlyList<CommandOutcome> LastOutcomes => _lastOutcomes;
@@ -33,6 +36,7 @@ public sealed class Simulation
     {
         ArgumentOutOfRangeException.ThrowIfNegative(startingFunds);
         Map = new CityMap(width, height);
+        Power = new PowerGrid(width, height);
         Funds = startingFunds;
         Prices = prices ?? PriceList.Default;
     }
@@ -72,7 +76,7 @@ public sealed class Simulation
         // Networks only change when the map does, so skip the flood fill otherwise.
         if (_networksDirty)
         {
-            PoweredTiles = PowerGrid.Recompute(Map);
+            Power.Recompute(Map);
             _networksDirty = false;
         }
 

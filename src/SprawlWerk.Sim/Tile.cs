@@ -13,8 +13,10 @@ public enum TileKind : byte
 }
 
 /// <summary>
-/// One cell of the city grid. A small value type so a whole map is one
-/// contiguous array: cheap to copy, cheap to iterate, easy to serialize.
+/// One cell of the city grid: only what the player or the terrain decided,
+/// the state a save file holds. Anything the simulation works out from it
+/// (power, later water, traffic, fields) lives in that system's own arrays,
+/// so it is never saved and can always be rebuilt.
 /// </summary>
 public struct Tile
 {
@@ -22,9 +24,6 @@ public struct Tile
     public byte Height;
 
     public TileKind Kind;
-
-    /// <summary>Set by the power pass each tick.</summary>
-    public bool Powered;
 
     public readonly bool IsZone =>
         Kind is TileKind.Residential or TileKind.Commercial or TileKind.Industrial;

@@ -153,7 +153,7 @@ public partial class CityView : Node2D
         };
 
         // Zones without power are drawn dim: the first piece of feedback.
-        if (tile.IsZone && !tile.Powered) color = color.Darkened(0.55f);
+        if (tile.IsZone && !_sim.Power.IsPowered(x, y)) color = color.Darkened(0.55f);
 
         DrawColoredPolygon(Diamond(x, y), color);
         DrawPolyline(Diamond(x, y, close: true), new Color(0, 0, 0, 0.25f), 1f);
