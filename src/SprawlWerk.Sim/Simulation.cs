@@ -24,6 +24,9 @@ public sealed class Simulation
     /// <summary>Ticks elapsed since the city was founded.</summary>
     public long Tick { get; private set; }
 
+    /// <summary>The city's date, derived from <see cref="Tick"/>.</summary>
+    public CityDate Date => CityDate.FromTick(Tick);
+
     /// <summary>Which tiles have power; derived from <see cref="Map"/>, rebuilt when it changes.</summary>
     public PowerGrid Power { get; }
 
