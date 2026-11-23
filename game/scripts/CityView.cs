@@ -11,6 +11,7 @@ namespace SprawlWerk;
 ///
 /// Controls: 1 residential, 2 commercial, 3 industrial, 4 road,
 /// 5 power line, 6 power plant, 0 bulldoze. Left-click or drag to place.
+/// The HUD shows funds, what the hovered tile would cost, and the last refusal.
 /// </summary>
 public partial class CityView : Node2D
 {
@@ -24,6 +25,7 @@ public partial class CityView : Node2D
     private double _tickAccumulator;
     private bool _painting;
     private Vector2I? _hover;
+    private string _lastRefusal = "";
 
     public override void _Ready()
     {
@@ -42,6 +44,7 @@ public partial class CityView : Node2D
         {
             _sim.Step();
             _tickAccumulator -= SecondsPerTick;
+            NoteRefusals();
         }
 
         var hover = ScreenToTile(GetLocalMousePosition());
@@ -97,12 +100,44 @@ public partial class CityView : Node2D
 
         var hudOrigin = -Position + new Vector2(16, 28);
         DrawString(ThemeDB.FallbackFont, hudOrigin,
-            $"Tool: {_tool}    Tick: {_sim.Tick}    Powered tiles: {_sim.PoweredTiles}",
+            $"Funds: ${_sim.Funds:N0}    Tool: {_tool}    Tick: {_sim.Tick}    Powered tiles: {_sim.PoweredTiles}",
             HorizontalAlignment.Left, -1, 16, Colors.White);
         DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 22),
             "1 Res  2 Com  3 Ind  4 Road  5 Line  6 Plant  0 Bulldoze",
             HorizontalAlignment.Left, -1, 14, new Color(1, 1, 1, 0.6f));
+
+        if (_hover is { } q)
+        {
+            var quote = _sim.Quote(CommandFor(q));
+            var (text, color) = quote.Accepted
+                ? ($"Here: ${quote.Cost:N0}", Colors.White)
+                : ($"Here: {Describe(quote)}", new Color("f2a07b"));
+            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 44),
+                text, HorizontalAlignment.Left, -1, 14, color);
+        }
+
+        if (_lastRefusal.Length > 0)
+            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 66),
+                _lastRefusal, HorizontalAlignment.Left, -1, 14, new Color("e86f5c"));
     }
+
+    // Drag painting re-sends tiles that are already done; only real problems are shown.
+    private void NoteRefusals()
+    {
+        foreach (var outcome in _sim.LastOutcomes)
+        {
+            if (outcome.Result.Refusal is Refusal.None or Refusal.NothingToChange) continue;
+            _lastRefusal = $"Refused: {Describe(outcome.Result)}";
+        }
+    }
+
+    private static string Describe(CommandResult r) => r.Refusal switch
+    {
+        Refusal.InsufficientFunds => $"needs ${r.Cost:N0}, not enough funds",
+        Refusal.NothingToChange => "already built",
+        Refusal.OutOfBounds => "off the map",
+        _ => r.Refusal.ToString(),
+    };
 
     private void DrawTile(int x, int y, Tile tile)
     {
@@ -126,11 +161,13 @@ public partial class CityView : Node2D
 
     private void Place(Vector2I tile)
     {
-        ICommand cmd = _tool == TileKind.Empty
-            ? new BulldozeCommand(tile.X, tile.Y)
-            : new PlaceCommand(tile.X, tile.Y, _tool);
-        _sim.Enqueue(cmd);
+        _lastRefusal = "";
+        _sim.Enqueue(CommandFor(tile));
     }
+
+    private ICommand CommandFor(Vector2I tile) => _tool == TileKind.Empty
+        ? new BulldozeCommand(tile.X, tile.Y)
+        : new PlaceCommand(tile.X, tile.Y, _tool);
 
     private void SeedDemoCity()
     {
