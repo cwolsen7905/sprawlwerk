@@ -57,4 +57,4 @@ a pull request. CI runs the simulation tests on every push.
 
 ## License
 
-TBD.
+BSD 3-Clause. See [LICENSE](LICENSE).
