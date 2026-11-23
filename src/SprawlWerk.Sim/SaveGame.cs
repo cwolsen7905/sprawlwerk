@@ -6,6 +6,9 @@ namespace SprawlWerk.Sim;
 /// <summary>A save that cannot be read: malformed, damaged, or from a newer game.</summary>
 public sealed class SaveFormatException(string message, Exception? inner = null) : Exception(message, inner);
 
+/// <summary>Header facts of a save: enough for a save list.</summary>
+public readonly record struct SaveInfo(int Version, int Width, int Height, long Tick, long Funds, CityDate Date);
+
 /// <summary>
 /// Saves and loads a city as versioned JSON. Only stored state goes in: the
 /// terrain and what is built, funds and the tick. Derived state (power) is
@@ -76,20 +79,31 @@ public static class SaveGame
         }, Options);
     }
 
-    public static Simulation Deserialize(string json, PriceList? prices = null, PowerRules? power = null)
+    /// <summary>What a save says about itself, read without building the city.</summary>
+    public static SaveInfo ReadInfo(string json)
     {
-        Data data;
+        var data = Upgrade(Parse(json));
+        if (data.Width <= 0 || data.Height <= 0) throw new SaveFormatException("the map size is not positive");
+        if (data.Tick < 0) throw new SaveFormatException("the tick is negative");
+        return new SaveInfo(data.Version, data.Width, data.Height, data.Tick, data.Funds, CityDate.FromTick(data.Tick));
+    }
+
+    private static Data Parse(string json)
+    {
         try
         {
-            data = JsonSerializer.Deserialize<Data>(json, Options)
+            return JsonSerializer.Deserialize<Data>(json, Options)
                 ?? throw new SaveFormatException("the save is empty");
         }
         catch (JsonException e)
         {
             throw new SaveFormatException($"the save is not valid JSON: {e.Message}", e);
         }
+    }
 
-        data = Upgrade(data);
+    public static Simulation Deserialize(string json, PriceList? prices = null, PowerRules? power = null)
+    {
+        var data = Upgrade(Parse(json));
 
         if (data.Width <= 0 || data.Height <= 0) throw new SaveFormatException("the map size is not positive");
         if (data.Tick < 0) throw new SaveFormatException("the tick is negative");
