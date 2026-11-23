@@ -33,9 +33,10 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | G3 | Power capacity: plants supply a limited amount, the player is told about shortfalls | M | none yet | done (placeholder numbers: 40 per plant, 1 per zoned tile) |
 | G4 | Power lines may cross roads, at a cost | S | none yet | done (crossing tile, extra fee per tile) |
 | G5 | Save and load, versioned format | L | none yet | done: versioned JSON in the sim; F5/F9 quick slot in the view (save browser is M5) |
-| G6 | Demand and growth: buildings appear on zones | L | none yet | held (P4) |
-| G7 | Budget, taxes, network upkeep | L | none yet | held (P4) |
+| G6 | Demand and growth: buildings appear on zones | L | none yet | blocked (waits on G11) |
+| G7 | Budget, taxes, network upkeep | L | none yet | blocked (waits on G11) |
 | G8 | Rectangle and line drag with a cost preview | M | none yet | done |
+| G11 | Data-defined building types (size, zone, density, capacity) loaded from files, base content as a pack | L | none yet | open, needs its own design before building |
 | G9 | Query tool: click a tile to see what it is and why it is not growing | M | none yet | blocked (needs G6) |
 | G10 | Zone densities | M | none yet | blocked (needs G6) |
 
@@ -72,7 +73,7 @@ so they are easy to retune.
 a compact binary format; (c) a command log plus a seed. Recommend (a) now:
 readable, diffable, easy to migrate; revisit if saves get large.
 
-**P4: growth and budget (G6, G7).** Growth is a balance philosophy (how
+**P4: growth and budget (G6, G7), decided: option (c), wait for data-defined buildings.** Growth is a balance philosophy (how
 punishing sprawl should be). Options: (a) tick-based growth gated on power
 and road access only; (b) full demand model with monthly update; (c) wait
 for the calendar and data-defined buildings. Recommend (c): the calendar is
