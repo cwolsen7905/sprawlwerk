@@ -16,8 +16,8 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | # | Item | Size | Issue | Status |
 |---|------|------|-------|--------|
 | M1 | Strings in a table, not inline in views | S | none yet | done |
-| M2 | Title screen and main menu | L | none yet | held (P1) |
-| M3 | Pause menu, unsaved-changes prompt, settings (video, audio, controls, UI scale) | L | none yet | held (P1) |
+| M2 | Title screen and main menu | L | none yet | minimal shell done (New city, Quit); splash and 3D backdrop later |
+| M3 | Pause menu, unsaved-changes prompt, settings (video, audio, controls, UI scale) | L | none yet | pause overlay done (Resume, Quit); prompt and settings open |
 | M4 | New-city setup and loading screen | M | none yet | blocked (map sizes undecided) |
 | M5 | Save browser, Continue, autosave | M | none yet | blocked (needs save/load, G5) |
 | M6 | Toolbar replacing the key-only tool picker | M | none yet | held (P1) |
@@ -52,7 +52,7 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 
 ## Proposals held for a decision
 
-**P1: menu structure (M2, M3, M6).** Options: (a) a minimal shell now: title
+**P1: menu structure (M2, M3, M6), decided: option (a).** Options: (a) a minimal shell now: title
 with New / Quit, a pause overlay with Resume / Quit, on Godot `Control`
 nodes in the 2D debug view; (b) wait for the 3D view so menus sit over the
 real city, building only the speed and pause controls meanwhile; (c) the

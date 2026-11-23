@@ -8,6 +8,11 @@ public static class Strings
 {
     public const string ToolHelp = "1 Res  2 Com  3 Ind  4 Road  5 Line  6 Plant  0 Bulldoze";
     public const string TimeHelp = "Space pause  - slower  = faster";
+    public const string GameTitle = "SprawlWerk";
+    public const string MenuNew = "New city";
+    public const string MenuResume = "Resume";
+    public const string MenuQuit = "Quit";
+    public const string MenuPaused = "Paused";
     public const string Paused = "PAUSED";
     public const string AlreadyBuilt = "already built";
     public const string OffTheMap = "off the map";

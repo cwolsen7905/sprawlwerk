@@ -12,9 +12,10 @@ namespace SprawlWerk;
 /// Controls: 1 residential, 2 commercial, 3 industrial, 4 road,
 /// 5 power line, 6 power plant, 0 bulldoze. Left-click places one tile; drag to fill
 /// a rectangle (zones, bulldoze) or a straight line (road, power line), with the
-/// total cost shown while dragging. Escape cancels a drag.
+/// total cost shown while dragging. Escape cancels a drag (see <see cref="CancelDrag"/>).
 /// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
 /// accepted while paused and apply when time resumes.
+/// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
 /// </summary>
 public partial class CityView : Node2D
@@ -35,6 +36,28 @@ public partial class CityView : Node2D
     private Vector2I? _hover;
     private string _lastRefusal = "";
 
+    /// <summary>False while a menu is open: no time passes and the view ignores input.</summary>
+    public bool Active { get; set; } = true;
+
+    /// <summary>Abandon a drag in progress; true if there was one.</summary>
+    public bool CancelDrag()
+    {
+        bool was = _dragStart is not null;
+        _dragStart = null;
+        return was;
+    }
+
+    /// <summary>Start over with an empty city.</summary>
+    public void NewCity()
+    {
+        _sim = new Simulation(MapSize, MapSize);
+        _sim.Step();
+        _tickAccumulator = 0;
+        _paused = false;
+        _dragStart = null;
+        _lastRefusal = "";
+    }
+
     public override void _Ready()
     {
         _sim = new Simulation(MapSize, MapSize);
@@ -48,7 +71,7 @@ public partial class CityView : Node2D
     {
         // Fixed-rate simulation ticks, independent of frame rate.
         // Speed only changes how fast time is fed in; each tick is the same.
-        if (!_paused) _tickAccumulator += delta * Speeds[_speedIndex];
+        if (Active && !_paused) _tickAccumulator += delta * Speeds[_speedIndex];
         while (_tickAccumulator >= SecondsPerTick)
         {
             _sim.Step();
@@ -67,6 +90,7 @@ public partial class CityView : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (!Active) return;
         switch (@event)
         {
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
@@ -81,8 +105,7 @@ public partial class CityView : Node2D
                 break;
 
             case InputEventKey { Pressed: true, Echo: false } key:
-                if (key.Keycode == Key.Escape) _dragStart = null;
-                else if (key.Keycode == Key.Space) _paused = !_paused;
+                if (key.Keycode == Key.Space) _paused = !_paused;
                 else if (key.Keycode == Key.Minus) _speedIndex = Mathf.Max(0, _speedIndex - 1);
                 else if (key.Keycode == Key.Equal) _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1);
 

@@ -43,7 +43,7 @@ Current controls: `1` residential, `2` commercial, `3` industrial, `4` road,
 `5` power line, `6` power plant, `0` bulldoze. Click to place one tile; drag to fill a rectangle (zones, bulldoze) or a
 straight line (road, power line); the cost shows while you drag, and Escape
 cancels.
-Zones without power are drawn dim. `Space` pauses; `-` and `=` set the
+Zones without power are drawn dim. `Escape` opens the pause menu; `Space` pauses; `-` and `=` set the
 speed (1x, 2x, 4x).
 
 ## What works today
@@ -51,6 +51,7 @@ speed (1x, 2x, 4x).
 - Tile map with zones, roads, power lines and plants
 - Command queue applied on fixed simulation ticks
 - Power grid: flood fill from plants through lines and zones
+- A minimal title menu and pause menu
 - A calendar derived from ticks, pause and three speeds
 - Isometric debug view in Godot with tile picking
 
