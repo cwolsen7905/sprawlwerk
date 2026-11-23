@@ -8,7 +8,8 @@ mirrored to gitlab.brainchurts.com/brainchurts/sprawlwerk by
 ## Architecture rules
 
 - `src/SprawlWerk.Sim` is engine-agnostic. Never reference Godot from it.
-  It must build and test with plain `dotnet test`.
+  It must build and test with plain `dotnet test`. CI enforces this with
+  `tools/check-sim-no-godot.sh`; run it locally before pushing.
 - All player actions go through `ICommand` and are applied in
   `Simulation.Step()`. The game never mutates `CityMap` directly.
 - The simulation advances in fixed ticks, independent of frame rate.

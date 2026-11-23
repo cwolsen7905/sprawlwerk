@@ -20,5 +20,8 @@ jobs:
       - name: Restore
         run: dotnet restore tests/SprawlWerk.Sim.Tests/SprawlWerk.Sim.Tests.csproj
 
+      - name: Simulation has no Godot reference
+        run: tools/check-sim-no-godot.sh
+
       - name: Test
         run: dotnet test tests/SprawlWerk.Sim.Tests/SprawlWerk.Sim.Tests.csproj --no-restore --logger "console;verbosity=normal"
