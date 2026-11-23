@@ -2,8 +2,9 @@
 
 Open-source city builder re-imagining the classic isometric city sims of
 the 90s. Website repo: sprawlwerk-web (GitLab). Primary repo: GitHub,
-mirrored to gitlab.brainchurts.com/brainchurts/sprawlwerk by
-`.github/workflows/mirror-gitlab.yml`.
+mirrored to gitlab.brainchurts.com/brainchurts/sprawlwerk. GitLab pulls
+the mirror; never add a GitHub workflow, secret or token that pushes to or
+can reach GitLab.
 
 ## Architecture rules
 
