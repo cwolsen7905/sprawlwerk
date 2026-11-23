@@ -1,0 +1,19 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <!--
+    The Godot front end. It draws the simulation and turns input into
+    commands; all city logic lives in src/SprawlWerk.Sim.
+    Keep the Godot.NET.Sdk version in step with the editor version.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>SprawlWerk</RootNamespace>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\SprawlWerk.Sim\SprawlWerk.Sim.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,27 @@
+# Godot
+.godot/
+game/.godot/
+game/android/
+*.translation
+export_presets.cfg
+export_credentials.cfg
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.trx
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Builds
+build/
+dist/

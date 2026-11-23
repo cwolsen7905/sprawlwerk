@@ -1,0 +1,17 @@
+# Normalize line endings in the repo; check out native.
+* text=auto eol=lf
+
+*.sln text eol=crlf
+*.cs  text diff=csharp
+
+# Binary assets (Git LFS can take these over later if the repo grows)
+*.png binary
+*.jpg binary
+*.webp binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
+*.glb binary
+*.blend binary
