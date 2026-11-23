@@ -162,16 +162,7 @@ public partial class CityView : Node2D
 
     private void DrawTile(int x, int y, Tile tile)
     {
-        var color = tile.Kind switch
-        {
-            TileKind.Residential => new Color("8fd18a"),
-            TileKind.Commercial => new Color("8ab8f0"),
-            TileKind.Industrial => new Color("f2c46b"),
-            TileKind.Road => new Color("4a505c"),
-            TileKind.PowerLine => new Color("c9a0e8"),
-            TileKind.PowerPlant => new Color("e86f5c"),
-            _ => new Color("2d3a25"),
-        };
+        var color = Palette.For(tile.Kind);
 
         // Zones without power are drawn dim: the first piece of feedback.
         if (tile.IsZone && !_sim.Power.IsPowered(x, y)) color = color.Darkened(0.55f);
