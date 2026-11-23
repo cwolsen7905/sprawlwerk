@@ -10,6 +10,8 @@ public enum TileKind : byte
     Road,
     PowerLine,
     PowerPlant,
+    /// <summary>A road with a power line carried across it; both networks use it.</summary>
+    RoadWithLine,
 }
 
 /// <summary>
@@ -30,5 +32,5 @@ public struct Tile
 
     /// <summary>Tiles that carry power to their neighbours.</summary>
     public readonly bool ConductsPower =>
-        IsZone || Kind is TileKind.PowerLine or TileKind.PowerPlant;
+        IsZone || Kind is TileKind.PowerLine or TileKind.PowerPlant or TileKind.RoadWithLine;
 }

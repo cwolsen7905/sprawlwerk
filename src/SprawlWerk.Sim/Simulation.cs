@@ -24,6 +24,9 @@ public sealed class Simulation
     /// <summary>Ticks elapsed since the city was founded.</summary>
     public long Tick { get; private set; }
 
+    /// <summary>The city's date, derived from <see cref="Tick"/>.</summary>
+    public CityDate Date => CityDate.FromTick(Tick);
+
     /// <summary>Which tiles have power; derived from <see cref="Map"/>, rebuilt when it changes.</summary>
     public PowerGrid Power { get; }
 
@@ -32,13 +35,21 @@ public sealed class Simulation
     /// <summary>Every command applied or refused in the last <see cref="Step"/>, in order.</summary>
     public IReadOnlyList<CommandOutcome> LastOutcomes => _lastOutcomes;
 
-    public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null)
+    public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null, PowerRules? power = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(startingFunds);
         Map = new CityMap(width, height);
-        Power = new PowerGrid(width, height);
+        Power = new PowerGrid(width, height, power);
         Funds = startingFunds;
         Prices = prices ?? PriceList.Default;
+    }
+
+    /// <summary>Set the clock and rebuild derived state after a load; the map is already filled in.</summary>
+    internal void Restore(long tick)
+    {
+        Tick = tick;
+        Power.Recompute(Map);
+        _networksDirty = false;
     }
 
     /// <summary>Queue a player action; it is applied at the start of the next tick.</summary>

@@ -10,7 +10,13 @@ namespace SprawlWerk;
 /// before the rendering does.
 ///
 /// Controls: 1 residential, 2 commercial, 3 industrial, 4 road,
-/// 5 power line, 6 power plant, 0 bulldoze. Left-click or drag to place.
+/// 5 power line, 6 power plant, 0 bulldoze. Left-click places one tile; drag to fill
+/// a rectangle (zones, bulldoze) or a straight line (road, power line), with the
+/// total cost shown while dragging. Escape cancels a drag (see <see cref="CancelDrag"/>).
+/// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
+/// accepted while paused and apply when time resumes.
+/// F5 quick-saves and F9 quick-loads one slot (a stand-in until there is a save browser).
+/// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
 /// </summary>
 public partial class CityView : Node2D
@@ -22,10 +28,66 @@ public partial class CityView : Node2D
 
     private Simulation _sim = null!;
     private TileKind _tool = TileKind.Residential;
+    private static readonly int[] Speeds = [1, 2, 4];
+
     private double _tickAccumulator;
-    private bool _painting;
+    private bool _paused;
+    private int _speedIndex;
+    private Vector2I? _dragStart;
     private Vector2I? _hover;
     private string _lastRefusal = "";
+    private string _notice = "";
+
+    /// <summary>False while a menu is open: no time passes and the view ignores input.</summary>
+    public bool Active { get; set; } = true;
+
+    /// <summary>Abandon a drag in progress; true if there was one.</summary>
+    public bool CancelDrag()
+    {
+        bool was = _dragStart is not null;
+        _dragStart = null;
+        return was;
+    }
+
+    private const string QuickSavePath = "user://quicksave.json";
+
+    private void QuickSave()
+    {
+        using var file = Godot.FileAccess.Open(QuickSavePath, Godot.FileAccess.ModeFlags.Write);
+        if (file is null) { _lastRefusal = Strings.SaveFailed; return; }
+        file.StoreString(SaveGame.Serialize(_sim));
+        _lastRefusal = "";
+        _notice = Strings.Saved;
+    }
+
+    private void QuickLoad()
+    {
+        if (!Godot.FileAccess.FileExists(QuickSavePath)) { _lastRefusal = Strings.NoSave; return; }
+        try
+        {
+            _sim = SaveGame.Deserialize(Godot.FileAccess.GetFileAsString(QuickSavePath));
+        }
+        catch (SaveFormatException e)
+        {
+            _lastRefusal = Strings.LoadFailed(e.Message);
+            return;
+        }
+        _tickAccumulator = 0;
+        _dragStart = null;
+        _lastRefusal = "";
+        _notice = Strings.Loaded;
+    }
+
+    /// <summary>Start over with an empty city.</summary>
+    public void NewCity()
+    {
+        _sim = new Simulation(MapSize, MapSize);
+        _sim.Step();
+        _tickAccumulator = 0;
+        _paused = false;
+        _dragStart = null;
+        _lastRefusal = "";
+    }
 
     public override void _Ready()
     {
@@ -39,7 +101,8 @@ public partial class CityView : Node2D
     public override void _Process(double delta)
     {
         // Fixed-rate simulation ticks, independent of frame rate.
-        _tickAccumulator += delta;
+        // Speed only changes how fast time is fed in; each tick is the same.
+        if (Active && !_paused) _tickAccumulator += delta * Speeds[_speedIndex];
         while (_tickAccumulator >= SecondsPerTick)
         {
             _sim.Step();
@@ -51,7 +114,6 @@ public partial class CityView : Node2D
         if (hover != _hover)
         {
             _hover = hover;
-            if (_painting && hover is { } t) Place(t);
         }
 
         QueueRedraw();
@@ -59,14 +121,27 @@ public partial class CityView : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (!Active) return;
         switch (@event)
         {
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
-                _painting = mb.Pressed;
-                if (mb.Pressed && ScreenToTile(GetLocalMousePosition()) is { } tile) Place(tile);
+                if (mb.Pressed)
+                    _dragStart = ScreenToTile(GetLocalMousePosition());
+                else if (_dragStart is { } start)
+                {
+                    // Released off the map: use the last tile the cursor was over.
+                    if ((ScreenToTile(GetLocalMousePosition()) ?? _hover) is { } end) Place(start, end);
+                    _dragStart = null;
+                }
                 break;
 
             case InputEventKey { Pressed: true, Echo: false } key:
+                if (key.Keycode == Key.F5) QuickSave();
+                else if (key.Keycode == Key.F9) QuickLoad();
+                else if (key.Keycode == Key.Space) _paused = !_paused;
+                else if (key.Keycode == Key.Minus) _speedIndex = Mathf.Max(0, _speedIndex - 1);
+                else if (key.Keycode == Key.Equal) _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1);
+
                 _tool = key.Keycode switch
                 {
                     Key.Key1 => TileKind.Residential,
@@ -95,62 +170,64 @@ public partial class CityView : Node2D
             DrawTile(x, y, map[x, y]);
         }
 
-        if (_hover is { } h)
-            DrawPolyline(Diamond(h.X, h.Y, close: true), Colors.White, 1.5f);
+        var preview = PreviewCommand();
+        if (preview is PlaceCommand pc) DrawArea(pc.X, pc.Y, pc.Width, pc.Height);
+        else if (preview is BulldozeCommand bc) DrawArea(bc.X, bc.Y, bc.Width, bc.Height);
 
         var hudOrigin = -Position + new Vector2(16, 28);
         DrawString(ThemeDB.FallbackFont, hudOrigin,
-            $"Funds: ${_sim.Funds:N0}    Tool: {_tool}    Tick: {_sim.Tick}    Powered tiles: {_sim.PoweredTiles}",
+            Strings.Hud(_sim.Funds, _tool.ToString(), _sim.Date.ToString(), _sim.PoweredTiles,
+                _paused ? Strings.Paused : $"{Speeds[_speedIndex]}x"),
             HorizontalAlignment.Left, -1, 16, Colors.White);
         DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 22),
-            "1 Res  2 Com  3 Ind  4 Road  5 Line  6 Plant  0 Bulldoze",
+            $"{Strings.ToolHelp}    {Strings.TimeHelp}",
             HorizontalAlignment.Left, -1, 14, new Color(1, 1, 1, 0.6f));
 
-        if (_hover is { } q)
+        if (preview is not null)
         {
-            var quote = _sim.Quote(CommandFor(q));
+            var quote = _sim.Quote(preview);
             var (text, color) = quote.Accepted
-                ? ($"Here: ${quote.Cost:N0}", Colors.White)
-                : ($"Here: {Describe(quote)}", new Color("f2a07b"));
+                ? (Strings.Cost(quote.Cost), Colors.White)
+                : (Strings.Here(Describe(quote)), new Color("f2a07b"));
             DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 44),
                 text, HorizontalAlignment.Left, -1, 14, color);
         }
+
+        if (_notice.Length > 0)
+            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 110),
+                _notice, HorizontalAlignment.Left, -1, 14, new Color("8fd18a"));
+
+        if (_sim.Power.ZonesWithoutSupply > 0)
+            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 88),
+                Strings.PowerShort(_sim.Power.ZonesWithoutSupply, _sim.Power.Demand, _sim.Power.Supply),
+                HorizontalAlignment.Left, -1, 14, new Color("f2c46b"));
 
         if (_lastRefusal.Length > 0)
             DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 66),
                 _lastRefusal, HorizontalAlignment.Left, -1, 14, new Color("e86f5c"));
     }
 
-    // Drag painting re-sends tiles that are already done; only real problems are shown.
+    // Re-sent areas that are already built are not worth showing; only real problems are.
     private void NoteRefusals()
     {
         foreach (var outcome in _sim.LastOutcomes)
         {
             if (outcome.Result.Refusal is Refusal.None or Refusal.NothingToChange) continue;
-            _lastRefusal = $"Refused: {Describe(outcome.Result)}";
+            _lastRefusal = Strings.Refused(Describe(outcome.Result));
         }
     }
 
     private static string Describe(CommandResult r) => r.Refusal switch
     {
-        Refusal.InsufficientFunds => $"needs ${r.Cost:N0}, not enough funds",
-        Refusal.NothingToChange => "already built",
-        Refusal.OutOfBounds => "off the map",
+        Refusal.InsufficientFunds => Strings.NeedsFunds(r.Cost),
+        Refusal.NothingToChange => Strings.AlreadyBuilt,
+        Refusal.OutOfBounds => Strings.OffTheMap,
         _ => r.Refusal.ToString(),
     };
 
     private void DrawTile(int x, int y, Tile tile)
     {
-        var color = tile.Kind switch
-        {
-            TileKind.Residential => new Color("8fd18a"),
-            TileKind.Commercial => new Color("8ab8f0"),
-            TileKind.Industrial => new Color("f2c46b"),
-            TileKind.Road => new Color("4a505c"),
-            TileKind.PowerLine => new Color("c9a0e8"),
-            TileKind.PowerPlant => new Color("e86f5c"),
-            _ => new Color("2d3a25"),
-        };
+        var color = Palette.For(tile.Kind);
 
         // Zones without power are drawn dim: the first piece of feedback.
         if (tile.IsZone && !_sim.Power.IsPowered(x, y)) color = color.Darkened(0.55f);
@@ -159,15 +236,30 @@ public partial class CityView : Node2D
         DrawPolyline(Diamond(x, y, close: true), new Color(0, 0, 0, 0.25f), 1f);
     }
 
-    private void Place(Vector2I tile)
+    private void Place(Vector2I from, Vector2I to)
     {
         _lastRefusal = "";
-        _sim.Enqueue(CommandFor(tile));
+        _notice = "";
+        _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
     }
 
-    private ICommand CommandFor(Vector2I tile) => _tool == TileKind.Empty
-        ? new BulldozeCommand(tile.X, tile.Y)
-        : new PlaceCommand(tile.X, tile.Y, _tool);
+    // What the tool would do now: the whole drag if one is under way, else the hovered tile.
+    private ICommand? PreviewCommand()
+    {
+        if (_hover is not { } h) return null;
+        var from = _dragStart ?? h;
+        return Drag.Command(_tool, from.X, from.Y, h.X, h.Y);
+    }
+
+    private void DrawArea(int x, int y, int w, int h)
+    {
+        for (int ty = y; ty < y + h; ty++)
+        for (int tx = x; tx < x + w; tx++)
+        {
+            if (!_sim.Map.InBounds(tx, ty)) continue;
+            DrawPolyline(Diamond(tx, ty, close: true), Colors.White, 1.5f);
+        }
+    }
 
     private void SeedDemoCity()
     {
