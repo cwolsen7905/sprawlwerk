@@ -15,6 +15,7 @@ namespace SprawlWerk;
 /// total cost shown while dragging. Escape cancels a drag (see <see cref="CancelDrag"/>).
 /// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
 /// accepted while paused and apply when time resumes.
+/// F5 quick-saves and F9 quick-loads one slot (a stand-in until there is a save browser).
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
 /// </summary>
@@ -35,6 +36,7 @@ public partial class CityView : Node2D
     private Vector2I? _dragStart;
     private Vector2I? _hover;
     private string _lastRefusal = "";
+    private string _notice = "";
 
     /// <summary>False while a menu is open: no time passes and the view ignores input.</summary>
     public bool Active { get; set; } = true;
@@ -45,6 +47,35 @@ public partial class CityView : Node2D
         bool was = _dragStart is not null;
         _dragStart = null;
         return was;
+    }
+
+    private const string QuickSavePath = "user://quicksave.json";
+
+    private void QuickSave()
+    {
+        using var file = Godot.FileAccess.Open(QuickSavePath, Godot.FileAccess.ModeFlags.Write);
+        if (file is null) { _lastRefusal = Strings.SaveFailed; return; }
+        file.StoreString(SaveGame.Serialize(_sim));
+        _lastRefusal = "";
+        _notice = Strings.Saved;
+    }
+
+    private void QuickLoad()
+    {
+        if (!Godot.FileAccess.FileExists(QuickSavePath)) { _lastRefusal = Strings.NoSave; return; }
+        try
+        {
+            _sim = SaveGame.Deserialize(Godot.FileAccess.GetFileAsString(QuickSavePath));
+        }
+        catch (SaveFormatException e)
+        {
+            _lastRefusal = Strings.LoadFailed(e.Message);
+            return;
+        }
+        _tickAccumulator = 0;
+        _dragStart = null;
+        _lastRefusal = "";
+        _notice = Strings.Loaded;
     }
 
     /// <summary>Start over with an empty city.</summary>
@@ -105,7 +136,9 @@ public partial class CityView : Node2D
                 break;
 
             case InputEventKey { Pressed: true, Echo: false } key:
-                if (key.Keycode == Key.Space) _paused = !_paused;
+                if (key.Keycode == Key.F5) QuickSave();
+                else if (key.Keycode == Key.F9) QuickLoad();
+                else if (key.Keycode == Key.Space) _paused = !_paused;
                 else if (key.Keycode == Key.Minus) _speedIndex = Mathf.Max(0, _speedIndex - 1);
                 else if (key.Keycode == Key.Equal) _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1);
 
@@ -160,6 +193,10 @@ public partial class CityView : Node2D
                 text, HorizontalAlignment.Left, -1, 14, color);
         }
 
+        if (_notice.Length > 0)
+            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 110),
+                _notice, HorizontalAlignment.Left, -1, 14, new Color("8fd18a"));
+
         if (_sim.Power.ZonesWithoutSupply > 0)
             DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 88),
                 Strings.PowerShort(_sim.Power.ZonesWithoutSupply, _sim.Power.Demand, _sim.Power.Supply),
@@ -202,6 +239,7 @@ public partial class CityView : Node2D
     private void Place(Vector2I from, Vector2I to)
     {
         _lastRefusal = "";
+        _notice = "";
         _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
     }
 

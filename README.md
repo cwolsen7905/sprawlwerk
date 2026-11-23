@@ -43,7 +43,7 @@ Current controls: `1` residential, `2` commercial, `3` industrial, `4` road,
 `5` power line, `6` power plant, `0` bulldoze. Click to place one tile; drag to fill a rectangle (zones, bulldoze) or a
 straight line (road, power line); the cost shows while you drag, and Escape
 cancels.
-Zones without power are drawn dim. `Escape` opens the pause menu; `Space` pauses; `-` and `=` set the
+Zones without power are drawn dim. `Escape` opens the pause menu; `F5` saves and `F9` loads one quick slot; `Space` pauses; `-` and `=` set the
 speed (1x, 2x, 4x).
 
 ## What works today
@@ -54,6 +54,7 @@ speed (1x, 2x, 4x).
   capacity, and when a network is over it the zones farthest from a plant go dark
 - Power lines can cross roads (for a fee); a plain road still blocks power
 - A minimal title menu and pause menu
+- Versioned JSON saves; a loaded city continues exactly as the saved one would
 - A calendar derived from ticks, pause and three speeds
 - Isometric debug view in Godot with tile picking
 

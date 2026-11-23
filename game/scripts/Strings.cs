@@ -7,12 +7,17 @@ namespace SprawlWerk;
 public static class Strings
 {
     public const string ToolHelp = "1 Res  2 Com  3 Ind  4 Road  5 Line  6 Plant  0 Bulldoze";
-    public const string TimeHelp = "Space pause  - slower  = faster";
+    public const string TimeHelp = "Space pause  - slower  = faster  F5 save  F9 load";
     public const string GameTitle = "SprawlWerk";
     public const string MenuNew = "New city";
     public const string MenuResume = "Resume";
     public const string MenuQuit = "Quit";
     public const string MenuPaused = "Paused";
+    public const string Saved = "Saved";
+    public const string Loaded = "Loaded";
+    public const string SaveFailed = "Could not write the save";
+    public const string NoSave = "No saved city yet (F5 saves)";
+    public static string LoadFailed(string why) => $"Could not load: {why}";
     public const string Paused = "PAUSED";
     public const string AlreadyBuilt = "already built";
     public const string OffTheMap = "off the map";

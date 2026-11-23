@@ -19,7 +19,7 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | M2 | Title screen and main menu | L | none yet | minimal shell done (New city, Quit); splash and 3D backdrop later |
 | M3 | Pause menu, unsaved-changes prompt, settings (video, audio, controls, UI scale) | L | none yet | pause overlay done (Resume, Quit); prompt and settings open |
 | M4 | New-city setup and loading screen | M | none yet | blocked (map sizes undecided) |
-| M5 | Save browser, Continue, autosave | M | none yet | blocked (needs save/load, G5) |
+| M5 | Save browser, Continue, autosave | M | none yet | open (save/load exists) |
 | M6 | Toolbar replacing the key-only tool picker | M | none yet | held (P1) |
 | M7 | Credits and third-party asset list | S | none yet | blocked (no third-party assets yet) |
 | M8 | Colour-blind-safe zone and overlay palette | S | none yet | done for tiles (overlays wait on overlays) |
@@ -32,7 +32,7 @@ Status: `done` (in this branch), `held` (needs a decision, proposal below),
 | G2 | Pause and three speeds | S | none yet | done |
 | G3 | Power capacity: plants supply a limited amount, the player is told about shortfalls | M | none yet | done (placeholder numbers: 40 per plant, 1 per zoned tile) |
 | G4 | Power lines may cross roads, at a cost | S | none yet | done (crossing tile, extra fee per tile) |
-| G5 | Save and load, versioned format | L | none yet | held (P3) |
+| G5 | Save and load, versioned format | L | none yet | done: versioned JSON in the sim; F5/F9 quick slot in the view (save browser is M5) |
 | G6 | Demand and growth: buildings appear on zones | L | none yet | held (P4) |
 | G7 | Budget, taxes, network upkeep | L | none yet | held (P4) |
 | G8 | Rectangle and line drag with a cost preview | M | none yet | done |
@@ -68,7 +68,7 @@ grid and revisit with growth. Recommend (a) for capacity, shipped together
 with the crossing-roads rule, with the numbers kept in `PriceList`-style data
 so they are easy to retune.
 
-**P3: save format (G5).** Options: (a) JSON with a version number; (b)
+**P3: save format (G5), decided: option (a), versioned JSON.** Options: (a) JSON with a version number; (b)
 a compact binary format; (c) a command log plus a seed. Recommend (a) now:
 readable, diffable, easy to migrate; revisit if saves get large.
 
