@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "commercial",
+  "role": "zone",
+  "zone": "commercial",
+  "cost": 30,
+  "powerUse": 1
+}

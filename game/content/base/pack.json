@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "base",
+  "name": "SprawlWerk base content",
+  "version": "0.1.0",
+  "license": "BSD-3-Clause",
+  "authors": ["SprawlWerk contributors"]
+}

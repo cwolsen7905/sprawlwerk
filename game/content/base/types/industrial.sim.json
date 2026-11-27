@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "industrial",
+  "role": "zone",
+  "zone": "industrial",
+  "cost": 30,
+  "powerUse": 1
+}

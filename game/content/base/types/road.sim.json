@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "road",
+  "role": "network",
+  "network": "road",
+  "cost": 15
+}
