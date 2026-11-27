@@ -46,10 +46,11 @@ public partial class CityController : Node
     public Simulation Sim => _sim;
 
     /// <summary>
-    /// Goes up whenever the map may have changed (a command was applied, or a
-    /// different city was put in place). Views rebuild only when it moves.
+    /// Changes whenever something drawn may have changed: a different city was
+    /// put in place, or the simulation's <see cref="Simulation.MapRevision"/>
+    /// moved (commands, growth, networks). Views rebuild only when it changes.
     /// </summary>
-    public int MapVersion { get; private set; }
+    public (Simulation City, long Revision) MapVersion => (_sim, _sim.MapRevision);
 
     /// <summary>True while the 2D debug view is shown instead of the 3D world (F3).</summary>
     public bool DebugView { get; set; }
@@ -80,10 +81,13 @@ public partial class CityController : Node
     public override void _Ready()
     {
         // Something to look at behind the title menu; New city replaces it.
-        _sim = new Simulation(MapSize, MapSize);
+        _sim = NewSimulation();
         SeedDemoCity();
         _sim.Step();
     }
+
+    // Every city runs on the loaded content, so buildings grow (ADR 0011, 0012).
+    private static Simulation NewSimulation() => new(MapSize, MapSize, content: GameContent.Content);
 
     public override void _Process(double delta)
     {
@@ -176,7 +180,6 @@ public partial class CityController : Node
         Sfx? sound = null;
         foreach (var outcome in _sim.LastOutcomes)
         {
-            if (outcome.Result.Accepted) MapVersion++;
             if (outcome.Result.Refusal is Refusal.NothingToChange) continue;
             sound = SoundFor(outcome);
             if (outcome.Result.Accepted) continue;
@@ -205,10 +208,10 @@ public partial class CityController : Node
     // --- whole cities ---
 
     /// <summary>Start over with an empty city.</summary>
-    public void NewCity() => Replace(new Simulation(MapSize, MapSize), seedDemo: false);
+    public void NewCity() => Replace(NewSimulation(), seedDemo: false);
 
     /// <summary>Start over with the demo layout (developer flag <c>--demo-city</c>, and screenshots).</summary>
-    public void DemoCity() => Replace(new Simulation(MapSize, MapSize), seedDemo: true);
+    public void DemoCity() => Replace(NewSimulation(), seedDemo: true);
 
     private void Replace(Simulation sim, bool seedDemo)
     {
@@ -220,7 +223,6 @@ public partial class CityController : Node
         _dragStart = null;
         _lastRefusal = "";
         _notice = "";
-        MapVersion++;
         CityReplaced?.Invoke();
     }
 
@@ -231,12 +233,12 @@ public partial class CityController : Node
     /// <exception cref="SaveFormatException">The save is damaged or from a newer game; the current city is kept.</exception>
     public void LoadFromJson(string json)
     {
-        _sim = SaveGame.Deserialize(json);
+        _sim = SaveGame.Deserialize(json, content: GameContent.Content);
         _tickAccumulator = 0;
         _dragStart = null;
         _lastRefusal = "";
-        _notice = Strings.Loaded;
-        MapVersion++;
+        _notice = _sim.LoadReport.Count > 0 ? Strings.LoadedWithChanges(_sim.LoadReport.Count) : Strings.Loaded;
+        foreach (var line in _sim.LoadReport) GD.Print($"load: {line}");
         CityReplaced?.Invoke();
     }
 
@@ -271,7 +273,8 @@ public partial class CityController : Node
     }
 
     // A small town with every kind of tile: straights, bends, junctions and dead ends,
-    // a line crossing a road, powered zones and an unpowered one.
+    // lines crossing roads, zones of all three kinds that grow once time runs,
+    // and one commercial block left without power to show the difference.
     private void SeedDemoCity()
     {
         _sim.Enqueue(new PlaceCommand(4, 4, TileKind.PowerPlant));
@@ -279,7 +282,7 @@ public partial class CityController : Node
         _sim.Enqueue(new PlaceCommand(11, 2, 4, 5, TileKind.Residential));
         _sim.Enqueue(new PlaceCommand(15, 0, 1, MapSize, TileKind.Road));
         _sim.Enqueue(new PlaceCommand(16, 2, 4, 4, TileKind.Commercial));
-        _sim.Enqueue(new PlaceCommand(22, 10, 5, 4, TileKind.Industrial)); // unpowered on purpose
+        _sim.Enqueue(new PlaceCommand(22, 10, 5, 4, TileKind.Industrial));
         _sim.Enqueue(new PlaceCommand(5, 7, 10, 1, TileKind.Road));
         _sim.Enqueue(new PlaceCommand(16, 7, 12, 1, TileKind.Road));
         _sim.Enqueue(new PlaceCommand(21, 8, 1, 8, TileKind.Road));
@@ -288,5 +291,11 @@ public partial class CityController : Node
         _sim.Enqueue(new PlaceCommand(16, 9, 4, 3, TileKind.Commercial));
         _sim.Enqueue(new PlaceCommand(8, 5, 1, 5, TileKind.PowerLine)); // crosses the road at (8, 7)
         _sim.Enqueue(new PlaceCommand(7, 10, 3, 3, TileKind.Residential));
+        _sim.Enqueue(new PlaceCommand(4, 5, TileKind.PowerPlant)); // a second plant: 80 units
+        _sim.Enqueue(new PlaceCommand(15, 3, TileKind.PowerLine)); // across the main road to the shops
+        _sim.Enqueue(new PlaceCommand(20, 3, 2, 1, TileKind.PowerLine));
+        _sim.Enqueue(new PlaceCommand(21, 3, 1, 4, TileKind.PowerLine)); // down to the industry...
+        _sim.Enqueue(new PlaceCommand(21, 7, 1, 4, TileKind.PowerLine)); // ...across the east roads
+        // The lower shops (16..19, 9..11) stay unpowered on purpose.
     }
 }

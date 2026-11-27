@@ -40,6 +40,8 @@ public partial class Hud : CanvasLayer
     private Label _funds = null!;
     private Label _date = null!;
     private Label _power = null!;
+    private Label _people = null!;
+    private Label _demand = null!;
     private Label _tile = null!;
     private Label _quote = null!;
     private Label _message = null!;
@@ -64,6 +66,8 @@ public partial class Hud : CanvasLayer
         _date.Text = sim.Date.ToString();
         _power.Text = Strings.Power(sim.Power.Demand, sim.Power.Supply);
         _power.Modulate = sim.Power.ZonesWithoutSupply > 0 ? Warning : Colors.White;
+        _people.Text = Strings.People(sim.Residents, sim.CommercialJobs + sim.IndustrialJobs);
+        _demand.Text = Strings.DemandBars(sim.Demand.Residential, sim.Demand.Commercial, sim.Demand.Industrial);
 
         foreach (var (kind, button) in _toolButtons) button.SetPressedNoSignal(kind == _city.Tool);
         _pauseButton.SetPressedNoSignal(_city.Paused);
@@ -72,9 +76,14 @@ public partial class Hud : CanvasLayer
 
         if (_city.Hover is { } h)
         {
-            var kind = sim.Map[h.X, h.Y].Kind;
-            bool? powered = sim.Map[h.X, h.Y].IsZone ? sim.Power.IsPowered(h.X, h.Y) : null;
-            _tile.Text = Strings.TileStatus(h.X, h.Y, Strings.TileName(kind), powered);
+            var tile = sim.Map[h.X, h.Y];
+            bool? powered = tile.IsZone ? sim.Power.IsPowered(h.X, h.Y) : null;
+            string name = Strings.TileName(tile.Kind);
+            if (tile.IsZone && sim.Content is { } content)
+                name = tile.Building.IsNone
+                    ? Strings.ZoneWaiting(name, Strings.WhyNot(sim.WhyNotGrowing(h.X, h.Y)))
+                    : Strings.BuildingName(content[tile.Building].Id);
+            _tile.Text = Strings.TileStatus(h.X, h.Y, name, powered);
         }
         else
         {
@@ -136,9 +145,13 @@ public partial class Hud : CanvasLayer
         _funds = new Label();
         _date = new Label();
         _power = new Label();
+        _people = new Label();
+        _demand = new Label();
         row.AddChild(_funds);
         row.AddChild(_date);
         row.AddChild(_power);
+        row.AddChild(_people);
+        row.AddChild(_demand);
         row.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
 
         var speeds = new HBoxContainer();

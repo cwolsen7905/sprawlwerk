@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "id": "depot",
+  "models": ["res://assets/models/kenney/city-kit-industrial/building-e.glb", "res://assets/models/kenney/city-kit-industrial/building-f.glb", "res://assets/models/kenney/city-kit-industrial/building-g.glb"]
+}

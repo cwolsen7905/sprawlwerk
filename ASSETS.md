@@ -17,7 +17,9 @@ kit's shared texture (`Textures/colormap.png`).
 | File | Title | Author | Source | Licence | Notes |
 |---|---|---|---|---|---|
 | `game/assets/models/kenney/city-kit-roads/` | City Kit (Roads) | Kenney | https://kenney.nl/assets/city-kit-roads | CC0-1.0 | Road pieces and electricity pole, GLB; `License.txt` included |
-| `game/assets/models/kenney/city-kit-industrial/` | City Kit (Industrial) | Kenney | https://kenney.nl/assets/city-kit-industrial | CC0-1.0 | `building-c` and `chimney-large` (power plant), GLB; `License.txt` included |
+| `game/assets/models/kenney/city-kit-industrial/` | City Kit (Industrial) | Kenney | https://kenney.nl/assets/city-kit-industrial | CC0-1.0 | `building-c` and `chimney-large` (power plant); `building-a`, `b`, `d`, `e`, `f`, `g` (grown industry), GLB; `License.txt` included |
+| `game/assets/models/kenney/city-kit-suburban/` | City Kit (Suburban) | Kenney | https://kenney.nl/assets/city-kit-suburban | CC0-1.0 | `building-type-a` to `f` (grown houses), GLB; `License.txt` included |
+| `game/assets/models/kenney/city-kit-commercial/` | City Kit (Commercial) | Kenney | https://kenney.nl/assets/city-kit-commercial | CC0-1.0 | `building-a` to `f` (grown shops), GLB; `License.txt` included |
 
 ## Sound effects
 

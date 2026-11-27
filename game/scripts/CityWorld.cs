@@ -34,7 +34,7 @@ public partial class CityWorld : Node3D
     private MultiMeshInstance3D _preview = null!;
     private readonly Dictionary<string, Model> _models = new();
     private readonly Dictionary<(string Model, int Part), MultiMeshInstance3D> _instances = new();
-    private int _builtVersion = -1;
+    private (Simulation? City, long Revision) _builtVersion = (null, -1);
     private Vector2I _groundSize;
     private Rect2I? _previewArea;
     private bool _previewRefused;
@@ -132,6 +132,11 @@ public partial class CityWorld : Node3D
                 var color = Palette.Lot(tile.Kind);
                 if (!sim.Power.IsPowered(x, y)) color = Palette.Unpowered(color);
                 lots.Add((new Transform3D(Basis.Identity, centre + new Vector3(0, LotHeight, 0)), color));
+                if (TileModels.Building(map, x, y, sim.Content) is { } building)
+                {
+                    if (!transforms.TryGetValue(building.Model, out var built)) transforms[building.Model] = built = new List<Transform3D>();
+                    built.Add(Placed(building, centre + new Vector3(0, LotHeight, 0)));
+                }
                 continue;
             }
 

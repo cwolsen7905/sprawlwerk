@@ -62,6 +62,12 @@ To skip the title menu while developing: `godot --path game -- --new-city`
 ## What works today
 
 - Tile map with zones, roads, power lines and plants
+- Buildings grow on zones that have power, a road within three tiles and
+  demand: houses, shops and factories, drawn as low-poly models. Jobs pull
+  residents, residents pull shops, workers pull industry; the top bar shows
+  residents, jobs and demand, and the status bar says why a zone is not growing
+- Building types are data: `game/content/base` holds each type's numbers
+  (`*.sim.json`) and models (`*.art.json`); change a number there and restart
 - Command queue applied on fixed simulation ticks
 - Power grid: flood fill from plants through lines and zones; each plant has a
   capacity, and when a network is over it the zones farthest from a plant go dark

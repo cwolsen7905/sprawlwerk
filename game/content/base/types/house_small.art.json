@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "id": "house_small",
+  "models": ["res://assets/models/kenney/city-kit-suburban/building-type-a.glb", "res://assets/models/kenney/city-kit-suburban/building-type-b.glb", "res://assets/models/kenney/city-kit-suburban/building-type-c.glb"]
+}

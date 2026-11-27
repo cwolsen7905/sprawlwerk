@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "id": "workshop",
+  "models": ["res://assets/models/kenney/city-kit-industrial/building-a.glb", "res://assets/models/kenney/city-kit-industrial/building-b.glb", "res://assets/models/kenney/city-kit-industrial/building-d.glb"]
+}

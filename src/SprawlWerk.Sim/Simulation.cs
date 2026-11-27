@@ -60,6 +60,13 @@ public sealed partial class Simulation
 
     public int IndustrialJobs { get; private set; }
 
+    /// <summary>
+    /// Goes up every time something a view draws may have changed: the map, by
+    /// a command or by the city itself (growth), or the networks recomputed
+    /// from it. A view can redraw only when it moves. Not saved.
+    /// </summary>
+    public long MapRevision { get; private set; }
+
     /// <summary>What a load could not keep (e.g. buildings from a pack that is not loaded); empty otherwise.</summary>
     public IReadOnlyList<string> LoadReport { get; internal set; } = [];
 
@@ -144,6 +151,7 @@ public sealed partial class Simulation
             {
                 command.Execute(Map);
                 Funds -= result.Cost;
+                MapRevision++;
                 _networksDirty = true;
             }
             _lastOutcomes.Add(new CommandOutcome(command, result));
@@ -157,6 +165,7 @@ public sealed partial class Simulation
         {
             RecomputeNetworks();
             Recount();
+            MapRevision++;
         }
 
         if (CityDate.IsMonthStart(Tick)) UpdateDemand();
@@ -164,6 +173,7 @@ public sealed partial class Simulation
         if (Tick % Growth.GrowthEvery == Growth.GrowthOffset && GrowthPass())
         {
             _networksDirty = true; // new buildings draw power; recompute next tick
+            MapRevision++;
             Recount();
         }
 
