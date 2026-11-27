@@ -1,12 +1,16 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/CityView.cs" id="1_cityview"]
 [ext_resource type="Script" path="res://scripts/ShellMenu.cs" id="2_shell"]
+[ext_resource type="Script" path="res://scripts/Hud.cs" id="3_hud"]
 
 [node name="Main" type="Node2D"]
 
 [node name="CityView" type="Node2D" parent="."]
 script = ExtResource("1_cityview")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("3_hud")
 
 [node name="Shell" type="CanvasLayer" parent="."]
 script = ExtResource("2_shell")

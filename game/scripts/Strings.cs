@@ -1,3 +1,5 @@
+using SprawlWerk.Sim;
+
 namespace SprawlWerk;
 
 /// <summary>
@@ -6,8 +8,7 @@ namespace SprawlWerk;
 /// </summary>
 public static class Strings
 {
-    public const string ToolHelp = "1 Res  2 Com  3 Ind  4 Road  5 Line  6 Plant  0 Bulldoze";
-    public const string TimeHelp = "Space pause  - slower  = faster  F5 save  F9 load";
+    public const string KeyHelp = "WASD/arrows or right-drag pan   wheel zoom   Space pause   - / = speed   F5 save   F9 load   Esc menu";
     public const string GameTitle = "SprawlWerk";
     public const string MenuNew = "New city";
     public const string MenuResume = "Resume";
@@ -45,8 +46,39 @@ public static class Strings
     public const string AlreadyBuilt = "already built";
     public const string OffTheMap = "off the map";
 
-    public static string Hud(long funds, string tool, string date, int powered, string speed) =>
-        $"Funds: ${funds:N0}    Tool: {tool}    {date}    Speed: {speed}    Powered tiles: {powered}";
+    public const string MenuButton = "Menu";
+    public const string PauseButton = "||";
+    public const string ToolsHeading = "Build";
+    public static string Speed(int multiplier) => $"{multiplier}x";
+    public static string Funds(long funds) => $"${funds:N0}";
+    public static string Power(long demand, long supply) => $"Power {demand} / {supply}";
+
+    public static string ToolName(TileKind kind) => kind switch
+    {
+        TileKind.Residential => "Residential",
+        TileKind.Commercial => "Commercial",
+        TileKind.Industrial => "Industrial",
+        TileKind.Road => "Road",
+        TileKind.PowerLine => "Power line",
+        TileKind.PowerPlant => "Power plant",
+        TileKind.RoadWithLine => "Road with power line",
+        TileKind.Empty => "Bulldoze",
+        _ => kind.ToString(),
+    };
+
+    public static string TileName(TileKind kind) => kind == TileKind.Empty ? "Empty land" : ToolName(kind);
+
+    public static string ToolButton(string name, long price) => $"{name}   ${price:N0}";
+
+    public static string ToolTip(string key, string name, long price, bool perTile) =>
+        perTile ? $"{name} ({key}): ${price:N0} per tile" : $"{name} ({key}): ${price:N0}";
+
+    public static string TileStatus(int x, int y, string kind, bool? powered) => powered switch
+    {
+        true => $"({x}, {y})  {kind}, powered",
+        false => $"({x}, {y})  {kind}, no power",
+        null => $"({x}, {y})  {kind}",
+    };
 
     public static string PowerShort(int zones, long demand, long supply) =>
         $"Power short: {zones} zones dark (demand {demand}, supply {supply}); build another plant";

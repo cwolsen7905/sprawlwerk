@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Godot;
 using SprawlWerk.Sim;
 
@@ -18,7 +20,8 @@ namespace SprawlWerk;
 /// The city autosaves once a month into one slot (see <see cref="Autosave"/>).
 /// F5 quick-saves and F9 quick-loads one slot; named saves go through the shell menu's save browser.
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
-/// The HUD shows funds, what the hovered tile would cost, and the last refusal.
+/// Camera: WASD or the arrow keys pan, right- or middle-drag pans, the wheel zooms toward the cursor.
+/// The HUD (toolbar, top bar, status line) lives in <see cref="Hud"/> and reads this view's state.
 /// Each tick's commands make one sound: the last one's (see <see cref="AudioDirector"/>).
 /// </summary>
 public partial class CityView : Node2D
@@ -39,9 +42,34 @@ public partial class CityView : Node2D
     private Vector2I? _hover;
     private string _lastRefusal = "";
     private string _notice = "";
+    private Camera2D _camera = null!;
+    private const float MinZoom = 0.5f;
+    private const float MaxZoom = 3f;
+    private const float PanSpeed = 900f; // screen pixels per second
 
     /// <summary>False while a menu is open: no time passes and the view ignores input.</summary>
     public bool Active { get; set; } = true;
+
+    /// <summary>The city being shown. Read-only for views; changes go through commands.</summary>
+    public Simulation Sim => _sim;
+
+    public TileKind Tool { get => _tool; set { _tool = value; _dragStart = null; } }
+
+    public bool Paused { get => _paused; set => _paused = value; }
+
+    public static IReadOnlyList<int> SpeedSteps => Speeds;
+
+    public int SpeedIndex { get => _speedIndex; set => _speedIndex = Mathf.Clamp(value, 0, Speeds.Length - 1); }
+
+    /// <summary>The tile under the cursor, unless the cursor is over the HUD.</summary>
+    public Vector2I? Hover => _hover;
+
+    public string LastRefusal => _lastRefusal;
+
+    public string Notice => _notice;
+
+    /// <summary>Set by the HUD: true when a screen point is over one of its panels.</summary>
+    public Func<Vector2, bool>? IsOverUi { get; set; }
 
     /// <summary>Abandon a drag in progress; true if there was one.</summary>
     public bool CancelDrag()
@@ -65,6 +93,7 @@ public partial class CityView : Node2D
         _dragStart = null;
         _lastRefusal = "";
         _notice = Strings.Loaded;
+        CenterCamera();
     }
 
     // Once a month, into the single autosave slot; a failure is shown and the game carries on.
@@ -106,6 +135,7 @@ public partial class CityView : Node2D
         _paused = false;
         _dragStart = null;
         _lastRefusal = "";
+        CenterCamera();
     }
 
     public override void _Ready()
@@ -113,8 +143,10 @@ public partial class CityView : Node2D
         _sim = new Simulation(MapSize, MapSize);
         SeedDemoCity();
         _sim.Step();
-        CenterOnScreen();
-        GetViewport().SizeChanged += CenterOnScreen;
+        _camera = new Camera2D();
+        AddChild(_camera);
+        _camera.MakeCurrent();
+        CenterCamera();
     }
 
     public override void _Process(double delta)
@@ -131,11 +163,10 @@ public partial class CityView : Node2D
             NoteRefusals();
         }
 
-        var hover = ScreenToTile(GetLocalMousePosition());
-        if (hover != _hover)
-        {
-            _hover = hover;
-        }
+        if (Active) PanWithKeys(delta);
+
+        bool overUi = IsOverUi?.Invoke(GetViewport().GetMousePosition()) ?? false;
+        _hover = overUi ? null : ScreenToTile(GetLocalMousePosition());
 
         QueueRedraw();
     }
@@ -145,9 +176,21 @@ public partial class CityView : Node2D
         if (!Active) return;
         switch (@event)
         {
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
+                ZoomAt(GetViewport().GetMousePosition(), 1.15f);
+                break;
+
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
+                ZoomAt(GetViewport().GetMousePosition(), 1f / 1.15f);
+                break;
+
+            case InputEventMouseMotion motion when (motion.ButtonMask & (MouseButtonMask.Right | MouseButtonMask.Middle)) != 0:
+                MoveCamera(-motion.Relative / _camera.Zoom);
+                break;
+
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
                 if (mb.Pressed)
-                    _dragStart = ScreenToTile(GetLocalMousePosition());
+                    _dragStart = _hover;
                 else if (_dragStart is { } start)
                 {
                     // Released off the map: use the last tile the cursor was over.
@@ -194,38 +237,6 @@ public partial class CityView : Node2D
         var preview = PreviewCommand();
         if (preview is PlaceCommand pc) DrawArea(pc.X, pc.Y, pc.Width, pc.Height);
         else if (preview is BulldozeCommand bc) DrawArea(bc.X, bc.Y, bc.Width, bc.Height);
-
-        var hudOrigin = -Position + new Vector2(16, 28);
-        DrawString(ThemeDB.FallbackFont, hudOrigin,
-            Strings.Hud(_sim.Funds, _tool.ToString(), _sim.Date.ToString(), _sim.PoweredTiles,
-                _paused ? Strings.Paused : $"{Speeds[_speedIndex]}x"),
-            HorizontalAlignment.Left, -1, 16, Colors.White);
-        DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 22),
-            $"{Strings.ToolHelp}    {Strings.TimeHelp}",
-            HorizontalAlignment.Left, -1, 14, new Color(1, 1, 1, 0.6f));
-
-        if (preview is not null)
-        {
-            var quote = _sim.Quote(preview);
-            var (text, color) = quote.Accepted
-                ? (Strings.Cost(quote.Cost), Colors.White)
-                : (Strings.Here(Describe(quote)), new Color("f2a07b"));
-            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 44),
-                text, HorizontalAlignment.Left, -1, 14, color);
-        }
-
-        if (_notice.Length > 0)
-            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 110),
-                _notice, HorizontalAlignment.Left, -1, 14, new Color("8fd18a"));
-
-        if (_sim.Power.ZonesWithoutSupply > 0)
-            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 88),
-                Strings.PowerShort(_sim.Power.ZonesWithoutSupply, _sim.Power.Demand, _sim.Power.Supply),
-                HorizontalAlignment.Left, -1, 14, new Color("f2c46b"));
-
-        if (_lastRefusal.Length > 0)
-            DrawString(ThemeDB.FallbackFont, hudOrigin + new Vector2(0, 66),
-                _lastRefusal, HorizontalAlignment.Left, -1, 14, new Color("e86f5c"));
     }
 
     // Re-sent areas that are already built are not worth showing; only real problems are.
@@ -251,7 +262,7 @@ public partial class CityView : Node2D
         _ => Sfx.Place,
     };
 
-    private static string Describe(CommandResult r) => r.Refusal switch
+    public static string Describe(CommandResult r) => r.Refusal switch
     {
         Refusal.InsufficientFunds => Strings.NeedsFunds(r.Cost),
         Refusal.NothingToChange => Strings.AlreadyBuilt,
@@ -277,8 +288,8 @@ public partial class CityView : Node2D
         _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
     }
 
-    // What the tool would do now: the whole drag if one is under way, else the hovered tile.
-    private ICommand? PreviewCommand()
+    /// <summary>What the tool would do now: the whole drag if one is under way, else the hovered tile.</summary>
+    public ICommand? PreviewCommand()
     {
         if (_hover is not { } h) return null;
         var from = _dragStart ?? h;
@@ -332,10 +343,44 @@ public partial class CityView : Node2D
         return _sim.Map.InBounds(x, y) ? new Vector2I(x, y) : null;
     }
 
-    private void CenterOnScreen()
+    // --- camera ---
+
+    private void CenterCamera()
     {
-        var size = GetViewportRect().Size;
-        float mapPixelHeight = MapSize * TileH;
-        Position = new Vector2(size.X / 2f, (size.Y - mapPixelHeight) / 2f);
+        if (_camera is null) return;
+        _camera.Zoom = Vector2.One;
+        _camera.Position = new Vector2(0, _sim.Map.Height * TileH / 2f);
+    }
+
+    private void PanWithKeys(double delta)
+    {
+        var dir = Vector2.Zero;
+        if (Input.IsKeyPressed(Key.A) || Input.IsKeyPressed(Key.Left)) dir.X -= 1;
+        if (Input.IsKeyPressed(Key.D) || Input.IsKeyPressed(Key.Right)) dir.X += 1;
+        if (Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up)) dir.Y -= 1;
+        if (Input.IsKeyPressed(Key.S) || Input.IsKeyPressed(Key.Down)) dir.Y += 1;
+        if (dir != Vector2.Zero) MoveCamera(dir.Normalized() * PanSpeed * (float)delta / _camera.Zoom.X);
+    }
+
+    // Keep the map's middle reachable: the camera may not wander past its edges.
+    private void MoveCamera(Vector2 by)
+    {
+        var map = _sim.Map;
+        float halfW = (map.Width + map.Height) * TileW / 4f;
+        var p = _camera.Position + by;
+        _camera.Position = new Vector2(
+            Mathf.Clamp(p.X, -halfW, halfW),
+            Mathf.Clamp(p.Y, 0, (map.Width + map.Height) * TileH / 2f));
+    }
+
+    // Zoom so the point under the cursor stays put.
+    private void ZoomAt(Vector2 screen, float factor)
+    {
+        float old = _camera.Zoom.X;
+        float zoom = Mathf.Clamp(old * factor, MinZoom, MaxZoom);
+        var offset = screen - GetViewportRect().Size / 2f;
+        var world = _camera.Position + offset / old;
+        _camera.Zoom = new Vector2(zoom, zoom);
+        _camera.Position = world - offset / zoom;
     }
 }
