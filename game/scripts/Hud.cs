@@ -82,7 +82,7 @@ public partial class Hud : CanvasLayer
             if (tile.IsZone && sim.Content is { } content)
                 name = tile.Building.IsNone
                     ? Strings.ZoneWaiting(name, Strings.WhyNot(sim.WhyNotGrowing(h.X, h.Y)))
-                    : Strings.BuildingName(content[tile.Building].Id);
+                    : Strings.Building(Strings.BuildingName(content[tile.Building].Id), sim.Stress(h.X, h.Y), sim.IsAbandoned(h.X, h.Y));
             _tile.Text = Strings.TileStatus(h.X, h.Y, name, powered);
         }
         else

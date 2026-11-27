@@ -164,6 +164,7 @@ public sealed partial class Simulation
                 candidates.RemoveAt(pick);
                 totalWeight -= w;
                 Map[px, py].Building = types[Random.Next(types.Count)];
+                ResetStress(py * Map.Width + px);
                 grew = true;
             }
         }

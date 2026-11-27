@@ -131,6 +131,7 @@ public partial class CityWorld : Node3D
             {
                 var color = Palette.Lot(tile.Kind);
                 if (!sim.Power.IsPowered(x, y)) color = Palette.Unpowered(color);
+                if (sim.IsAbandoned(x, y)) color = Palette.Abandoned;
                 lots.Add((new Transform3D(Basis.Identity, centre + new Vector3(0, LotHeight, 0)), color));
                 if (TileModels.Building(map, x, y, sim.Content) is { } building)
                 {

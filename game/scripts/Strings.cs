@@ -95,6 +95,9 @@ public static class Strings
         return name.Length == 0 ? id : char.ToUpperInvariant(name[0]) + name[1..];
     }
 
+    public static string Building(string name, int badMonths, bool abandoned) =>
+        abandoned ? $"{name}, abandoned" : badMonths > 0 ? $"{name}, struggling ({badMonths} bad months)" : name;
+
     public static string ZoneWaiting(string zone, string why) => why.Length == 0 ? zone : $"{zone}, {why}";
 
     public static string WhyNot(GrowthBlock block) => block switch
