@@ -14,13 +14,18 @@ namespace SprawlWerk;
 /// The views (<see cref="CityWorld"/> in 3D, <see cref="CityView"/> as the 2D
 /// debug view) only draw it and report which tile the pointer is over.
 ///
-/// Keys handled here: 1-6 and 0 pick a tool, Space pauses, - and = change the
-/// speed (1x, 2x, 4x), F5 quick-saves, F9 quick-loads, F3 swaps to the 2D debug
+/// Keys handled here: Q query, B bulldoze, R road, L power line, 1 2 3 the
+/// zones (4, 5, 6 and 0 still pick road, line, plant and bulldoze), Space
+/// pauses and resumes at the last speed, F5 quick-saves, F9 quick-loads, F3 swaps to the 2D debug
 /// view and back. Commands are still accepted while paused and apply when time
 /// resumes. The city autosaves once a month into one slot (see <see cref="Autosave"/>).
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// Each tick's commands make one sound: the last one's (see <see cref="AudioDirector"/>).
-/// Tax changes from the budget panel are commands too (<see cref="ChangeTax"/>).
+/// Tax changes from the budget window are commands too (<see cref="SetTax"/>).
+/// What the player should hear about (refusals, saves, autosaves) is raised as
+/// <see cref="Message"/>; the HUD shows it as a toast. The query tool
+/// (<see cref="Tool"/> null) builds nothing: a click picks the tile to inspect
+/// (<see cref="Inspected"/>).
 /// </summary>
 public partial class CityController : Node
 {
@@ -30,17 +35,18 @@ public partial class CityController : Node
     private static readonly int[] Speeds = [1, 2, 4];
 
     private Simulation _sim = null!;
-    private TileKind _tool = TileKind.Residential;
+    private TileKind? _tool;
     private double _tickAccumulator;
     private bool _paused;
     private int _speedIndex;
     private Vector2I? _dragStart;
-    private string _lastRefusal = "";
-    private string _notice = "";
     private readonly Dictionary<ZoneKind, int> _pendingTax = new();
 
     /// <summary>A different city was put in place (new, loaded): views recentre their cameras.</summary>
     public event Action? CityReplaced;
+
+    /// <summary>Something to tell the player: the text, and true when it is a problem (a refusal, a failed save).</summary>
+    public event Action<string, bool>? Message;
 
     /// <summary>False while a menu is open: no time passes and the views ignore input.</summary>
     public bool Active { get; set; } = true;
@@ -58,7 +64,11 @@ public partial class CityController : Node
     /// <summary>True while the 2D debug view is shown instead of the 3D world (F3).</summary>
     public bool DebugView { get; set; }
 
-    public TileKind Tool { get => _tool; set { _tool = value; _dragStart = null; } }
+    /// <summary>The build tool (Empty is bulldoze), or null for the query tool.</summary>
+    public TileKind? Tool { get => _tool; set { _tool = value; _dragStart = null; } }
+
+    /// <summary>The tile the query card shows, if any.</summary>
+    public Vector2I? Inspected { get; set; }
 
     public bool Paused { get => _paused; set => _paused = value; }
 
@@ -70,10 +80,6 @@ public partial class CityController : Node
     public Vector2I? Hover { get; set; }
 
     public bool Dragging => _dragStart is not null;
-
-    public string LastRefusal => _lastRefusal;
-
-    public string Notice => _notice;
 
     /// <summary>Set by the HUD: true when a screen point is over one of its panels.</summary>
     public Func<Vector2, bool>? IsOverUi { get; set; }
@@ -116,28 +122,29 @@ public partial class CityController : Node
             case Key.F3: DebugView = !DebugView; _dragStart = null; return;
             case Key.F5: QuickSave(); return;
             case Key.F9: QuickLoad(); return;
-            case Key.Space: _paused = !_paused; return;
-            case Key.Minus: _speedIndex = Mathf.Max(0, _speedIndex - 1); return;
-            case Key.Equal: _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1); return;
+            case Key.Space: _paused = !_paused; return; // the speed is kept, so resuming picks it up
+            case Key.Q: Tool = null; return;
         }
 
-        _tool = key.Keycode switch
-        {
-            Key.Key1 => TileKind.Residential,
-            Key.Key2 => TileKind.Commercial,
-            Key.Key3 => TileKind.Industrial,
-            Key.Key4 => TileKind.Road,
-            Key.Key5 => TileKind.PowerLine,
-            Key.Key6 => TileKind.PowerPlant,
-            Key.Key0 => TileKind.Empty,
-            _ => _tool,
-        };
+        if (ToolForKey(key.Keycode) is { } tool) Tool = tool;
     }
+
+    private static TileKind? ToolForKey(Key key) => key switch
+    {
+        Key.Key1 => TileKind.Residential,
+        Key.Key2 => TileKind.Commercial,
+        Key.Key3 => TileKind.Industrial,
+        Key.R or Key.Key4 => TileKind.Road,
+        Key.L or Key.Key5 => TileKind.PowerLine,
+        Key.Key6 => TileKind.PowerPlant,
+        Key.B or Key.Key0 => TileKind.Empty,
+        _ => null,
+    };
 
     // --- drags and commands ---
 
-    /// <summary>Left button down: the drag starts on the hovered tile (nothing happens off the map).</summary>
-    public void BeginDrag() => _dragStart = Hover;
+    /// <summary>Left button down: the drag starts on the hovered tile (nothing happens off the map). The query tool does not drag.</summary>
+    public void BeginDrag() => _dragStart = _tool is null ? null : Hover;
 
     /// <summary>Left button up: send the drag as one command. Released off the map, the last hovered tile is used.</summary>
     public void FinishDrag(Vector2I? at)
@@ -157,9 +164,9 @@ public partial class CityController : Node
     /// <summary>What the tool would do now: the whole drag if one is under way, else the hovered tile.</summary>
     public ICommand? PreviewCommand()
     {
-        if (Hover is not { } h) return null;
+        if (Hover is not { } h || _tool is not { } tool) return null;
         var from = _dragStart ?? h;
-        return Drag.Command(_tool, from.X, from.Y, h.X, h.Y);
+        return Drag.Command(tool, from.X, from.Y, h.X, h.Y);
     }
 
     /// <summary>The rectangle of tiles a place or bulldoze command covers, for previews.</summary>
@@ -172,9 +179,7 @@ public partial class CityController : Node
 
     private void Place(Vector2I from, Vector2I to)
     {
-        _lastRefusal = "";
-        _notice = "";
-        _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
+        if (_tool is { } tool) _sim.Enqueue(Drag.Command(tool, from.X, from.Y, to.X, to.Y));
     }
 
     // --- taxes ---
@@ -182,10 +187,10 @@ public partial class CityController : Node
     /// <summary>The rate to show for a zone: one asked for but not applied yet (paused), else the city's.</summary>
     public int TaxShown(ZoneKind zone) => _pendingTax.TryGetValue(zone, out int rate) ? rate : _sim.Taxes.For(zone);
 
-    /// <summary>Ask for a zone's rate one step up or down; sent as a command, clamped to the allowed range.</summary>
-    public void ChangeTax(ZoneKind zone, int step)
+    /// <summary>Ask for a zone's rate; sent as a command, clamped to the allowed range. Applies on the next tick.</summary>
+    public void SetTax(ZoneKind zone, int rate)
     {
-        int rate = Mathf.Clamp(TaxShown(zone) + step, BudgetRules.MinTax, BudgetRules.MaxTax);
+        rate = Mathf.Clamp(rate, BudgetRules.MinTax, BudgetRules.MaxTax);
         if (rate == TaxShown(zone)) return;
         _pendingTax[zone] = rate;
         _sim.Enqueue(new SetTaxCommand(zone, rate));
@@ -202,7 +207,7 @@ public partial class CityController : Node
             if (outcome.Result.Refusal is Refusal.NothingToChange) continue;
             sound = SoundFor(outcome);
             if (outcome.Result.Accepted) continue;
-            _lastRefusal = Strings.Refused(Describe(outcome.Result));
+            Message?.Invoke(Describe(outcome.Result), true);
         }
         if (sound is { } s) AudioDirector.Instance?.Play(s);
     }
@@ -217,6 +222,7 @@ public partial class CityController : Node
         _ => Sfx.Place,
     };
 
+    /// <summary>Why a command was refused, as a sentence for a toast.</summary>
     public static string Describe(CommandResult r) => r.Refusal switch
     {
         Refusal.InsufficientFunds => Strings.NeedsFunds(r.Cost),
@@ -243,8 +249,7 @@ public partial class CityController : Node
         _tickAccumulator = 0;
         _paused = false;
         _dragStart = null;
-        _lastRefusal = "";
-        _notice = "";
+        Inspected = null;
         CityReplaced?.Invoke();
     }
 
@@ -259,39 +264,36 @@ public partial class CityController : Node
         _pendingTax.Clear();
         _tickAccumulator = 0;
         _dragStart = null;
-        _lastRefusal = "";
-        _notice = _sim.LoadReport.Count > 0 ? Strings.LoadedWithChanges(_sim.LoadReport.Count) : Strings.Loaded;
+        Inspected = null;
         foreach (var line in _sim.LoadReport) GD.Print($"load: {line}");
         CityReplaced?.Invoke();
+        Message?.Invoke(_sim.LoadReport.Count > 0 ? Strings.LoadedWithChanges(_sim.LoadReport.Count) : Strings.Loaded, false);
     }
 
     // Once a month, into the single autosave slot; a failure is shown and the game carries on.
     private void AutosaveNow()
     {
         if (SaveStore.Write(Autosave.FileName, SaveToJson()) is { } problem)
-            _lastRefusal = Strings.AutosaveFailed(problem);
-        else
-            _notice = Strings.Autosaved;
+            Message?.Invoke(Strings.AutosaveFailed(problem), true);
     }
 
     private void QuickSave()
     {
-        if (SaveStore.WriteAtomic(QuickSavePath, SaveToJson()) is { } problem) { _lastRefusal = problem; return; }
-        _lastRefusal = "";
-        _notice = Strings.Saved;
+        if (SaveStore.WriteAtomic(QuickSavePath, SaveToJson()) is { } problem) { Message?.Invoke(problem, true); return; }
+        Message?.Invoke(Strings.Saved, false);
         AudioDirector.Instance?.Play(Sfx.Confirm);
     }
 
     private void QuickLoad()
     {
-        if (!Godot.FileAccess.FileExists(QuickSavePath)) { _lastRefusal = Strings.NoSave; return; }
+        if (!Godot.FileAccess.FileExists(QuickSavePath)) { Message?.Invoke(Strings.NoSave, true); return; }
         try
         {
             LoadFromJson(Godot.FileAccess.GetFileAsString(QuickSavePath));
         }
         catch (SaveFormatException e)
         {
-            _lastRefusal = Strings.LoadFailed(e.Message);
+            Message?.Invoke(Strings.LoadFailed(e.Message), true);
         }
     }
 
