@@ -218,3 +218,28 @@ public class GrowthTests
         Assert.Contains("will grow again", loaded.LoadReport[0]);
     }
 }
+
+public class MapRevisionTests
+{
+    [Fact]
+    public void The_revision_moves_when_the_map_or_networks_change_and_not_otherwise()
+    {
+        var sim = new Simulation(4, 4, content: TestContent.Load());
+        sim.Step(); // first recompute
+        long quiet = sim.MapRevision;
+        sim.Step();
+        Assert.Equal(quiet, sim.MapRevision);
+        sim.Enqueue(new PlaceCommand(0, 0, 4, 1, TileKind.Road));
+        sim.Enqueue(new PlaceCommand(0, 1, TileKind.PowerPlant));
+        sim.Enqueue(new PlaceCommand(1, 1, 3, 1, TileKind.Residential));
+        sim.Step();
+        long afterCommands = sim.MapRevision;
+        Assert.True(afterCommands >= quiet + 3);
+        sim.Enqueue(new PlaceCommand(0, 0, TileKind.Road)); // refused: nothing to change
+        sim.Step();
+        Assert.Equal(afterCommands, sim.MapRevision);
+        for (int i = 0; i < CityDate.TicksPerMonth; i++) sim.Step();
+        Assert.True(sim.Residents > 0);
+        Assert.True(sim.MapRevision > afterCommands);
+    }
+}

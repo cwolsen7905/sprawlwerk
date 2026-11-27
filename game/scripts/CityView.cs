@@ -96,6 +96,16 @@ public partial class CityView : Node2D
 
         DrawColoredPolygon(Diamond(x, y), color);
         DrawPolyline(Diamond(x, y, close: true), new Color(0, 0, 0, 0.25f), 1f);
+
+        // A grown building: a smaller, darker diamond on its lot.
+        if (!tile.Building.IsNone)
+        {
+            var c = Diamond(x, y);
+            var mid = (c[0] + c[2]) / 2;
+            var inner = new Vector2[c.Length];
+            for (int i = 0; i < c.Length; i++) inner[i] = mid + (c[i] - mid) * 0.55f;
+            DrawColoredPolygon(inner, color.Darkened(0.45f));
+        }
     }
 
     private void DrawArea(Rect2I area)

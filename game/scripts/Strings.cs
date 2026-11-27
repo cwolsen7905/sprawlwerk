@@ -52,6 +52,21 @@ public static class Strings
     public static string Speed(int multiplier) => $"{multiplier}x";
     public static string Funds(long funds) => $"${funds:N0}";
     public static string Power(long demand, long supply) => $"Power {demand} / {supply}";
+    public static string People(int residents, int jobs) => $"Residents {residents:N0}   Jobs {jobs:N0}";
+    public static string DemandBars(int r, int c, int i) => $"Demand  R {Bar(r)}  C {Bar(c)}  I {Bar(i)}";
+
+    // -1000..1000 as a five-step bar: below zero shows how far it is shrinking.
+    private static string Bar(int demand) => demand switch
+    {
+        <= -500 => "--",
+        < 0 => "-",
+        0 => "0",
+        < 250 => "+",
+        < 500 => "++",
+        < 750 => "+++",
+        _ => "++++",
+    };
+    public static string LoadedWithChanges(int count) => $"Loaded ({count} buildings from missing content were removed)";
 
     public static string ToolName(TileKind kind) => kind switch
     {
@@ -72,6 +87,25 @@ public static class Strings
 
     public static string ToolTip(string key, string name, long price, bool perTile) =>
         perTile ? $"{name} ({key}): ${price:N0} per tile" : $"{name} ({key}): ${price:N0}";
+
+    /// <summary>A content id as a name: <c>base:house_small</c> becomes "House small".</summary>
+    public static string BuildingName(string id)
+    {
+        var name = id[(id.IndexOf(':') + 1)..].Replace('_', ' ');
+        return name.Length == 0 ? id : char.ToUpperInvariant(name[0]) + name[1..];
+    }
+
+    public static string ZoneWaiting(string zone, string why) => why.Length == 0 ? zone : $"{zone}, {why}";
+
+    public static string WhyNot(GrowthBlock block) => block switch
+    {
+        GrowthBlock.NoPower => "no power",
+        GrowthBlock.NoRoad => "no road within reach",
+        GrowthBlock.NoDemand => "no demand",
+        GrowthBlock.NoBuildingType => "nothing to build",
+        GrowthBlock.None => "ready to grow",
+        _ => "",
+    };
 
     public static string TileStatus(int x, int y, string kind, bool? powered) => powered switch
     {

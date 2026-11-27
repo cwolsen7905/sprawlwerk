@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "id": "shop_small",
+  "models": ["res://assets/models/kenney/city-kit-commercial/building-a.glb", "res://assets/models/kenney/city-kit-commercial/building-b.glb", "res://assets/models/kenney/city-kit-commercial/building-c.glb"]
+}

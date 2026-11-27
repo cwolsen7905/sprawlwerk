@@ -41,6 +41,24 @@ public static class TileModels
     /// <summary>Every model this class may ask for, so the view can load them up front.</summary>
     public static readonly string[] All = [RoadStraight, RoadBend, RoadT, RoadCross, RoadEnd, Pole, PlantHall, PlantChimney];
 
+    /// <summary>
+    /// The building grown on a zone tile, if any, drawn on its lot: one of its
+    /// type's models from the art file, chosen by tile so neighbours vary but a
+    /// tile keeps its look, and turned to face a road next to it.
+    /// </summary>
+    public static ModelPlacement? Building(CityMap map, int x, int y, Sim.Content.ContentSet? content)
+    {
+        var handle = map[x, y].Building;
+        if (handle.IsNone || content is null) return null;
+        var models = GameContent.ModelsFor(content[handle].Id);
+        if (models.Count == 0) return null;
+        uint mix = (uint)(x * 73856093) ^ (uint)(y * 19349663);
+        string model = models[(int)(mix % (uint)models.Count)];
+        // Kenney's buildings face +Z (south, y + 1) unturned.
+        float turn = IsRoad(map, x, y + 1) ? 0f : IsRoad(map, x + 1, y) ? 90f : IsRoad(map, x, y - 1) ? 180f : IsRoad(map, x - 1, y) ? -90f : 0f;
+        return new ModelPlacement(model, turn, Fit: 0.82f);
+    }
+
     /// <summary>True for tiles drawn as a flat tinted lot rather than models.</summary>
     public static bool IsLot(TileKind kind) => kind is TileKind.Residential or TileKind.Commercial or TileKind.Industrial;
 
