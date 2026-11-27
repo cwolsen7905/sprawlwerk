@@ -40,27 +40,30 @@ dotnet test
 
 **The game:** open `game/project.godot` in Godot (.NET) and press Play (F5).
 
-The city is drawn in 3D. Pick a tool from the Build toolbar on the left, or
-press `1` residential, `2` commercial, `3` industrial, `4` road, `5` power
-line, `6` power plant, `0` bulldoze. Click to place one tile; drag to fill a
-rectangle (zones, bulldoze) or a straight line (road, power line); the tiles
-light up and the cost shows in the status bar while you drag (red when it
-would be refused), and Escape cancels. The status bar also names the tile
-under the cursor and whether it has power; zones without power are drawn dim.
+The city is drawn in 3D. Pick a tool from the palette on the left, or press
+`Q` query, `B` bulldoze, `R` road, `L` power line, `1` residential, `2`
+commercial, `3` industrial (the power plant is in the Power flyout; `4`, `5`,
+`6` and `0` still pick road, line, plant and bulldoze). Click to place one
+tile; drag to fill a rectangle (zones, bulldoze) or a straight line (road,
+power line); the tiles light up and a cost tag follows the cursor (red when
+the city cannot pay), and Escape cancels. With the query tool, click a tile
+to see why it is or is not growing; zones without power are drawn dim.
 
 Move the camera with `WASD` or the arrow keys, or drag the ground with the
-right mouse button; the wheel zooms toward the cursor; `Q` and `E` or a
-middle-drag rotate (dragging up and down also tilts). The top bar shows funds,
-date and power demand against supply, with pause and speed buttons (also
-`Space`, `-` and `=`) and a Menu button (also `Escape`) for the pause menu,
-which holds Save and the volume sliders. `F5` saves and `F9` loads one quick
-slot; Load is on the title menu. `F3` swaps to the flat 2D debug view and back.
-Next to funds, the top bar shows last month's net; its Budget button opens the
-budget panel (last month's taxes and upkeep, and `-`/`+` for each zone's tax rate).
+right mouse button (or the left, with the query tool); the wheel or `+` and
+`-` zoom; `,` and `.` or a middle-drag rotate (dragging up and down also
+tilts). The top bar shows the date, treasury, last month's net and
+population, with Budget (tax sliders and upkeep; pauses the city) and Save
+(an autosave row and three slots); the logo opens the menu (also `Escape`),
+which holds Save and the volume sliders. The bottom bar shows R/C/I demand
+and the speeds Pause, Snail, Fox and Falcon (`Space` pauses and resumes).
+`F5` saves and `F9` loads one quick slot; Load is on the title menu. `F3`
+swaps to the flat 2D debug view and back. The interface scales with the
+window height; the 3D view always renders at full resolution.
 
 To skip the title menu while developing: `godot --path game -- --new-city`
-(an empty city) or `-- --demo-city` (a small demo town); add `--open-budget`
-to start with the budget panel open.
+(an empty city) or `-- --demo-city` (a small demo town); add `--open-budget`,
+`--open-saves`, `--open-zones` or `--inspect=x,y` to start with that open.
 
 ## What works today
 
@@ -68,7 +71,7 @@ to start with the budget panel open.
 - Buildings grow on zones that have power, a road within three tiles and
   demand: houses, shops and factories, drawn as low-poly models. Jobs pull
   residents, residents pull shops, workers pull industry; the top bar shows
-  residents, jobs and demand, and the status bar says why a zone is not growing
+  population and R/C/I demand, and the query tool says why a zone is not growing
 - Buildings without power or a road, or in a zone whose demand has collapsed,
   struggle: after three bad months they are abandoned (grey, no residents or
   jobs), after nine they are cleared; good months bring them back

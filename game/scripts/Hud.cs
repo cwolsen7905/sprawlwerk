@@ -2,68 +2,155 @@ using System.Collections.Generic;
 using Godot;
 using SprawlWerk.Sim;
 using SprawlWerk.Sim.Content;
+using static SprawlWerk.UiKit;
+using Ui = SprawlWerk.Palette.Ui;
 
 namespace SprawlWerk;
 
 /// <summary>
-/// The in-game interface over the city: a build toolbar on the left (one
-/// button per tool with its colour, price and key), a top bar (funds and last
-/// month's net, date, power, pause and speed, Budget, Menu), a budget panel
-/// (last month's taxes and upkeep, tax rates with - and + buttons) and a
-/// status line at the bottom (the tile under the cursor, the cost of what the
-/// tool would do, notices and refusals). It reads <see cref="CityController"/>
-/// every frame and changes only its tool, pause and speed; building and tax
-/// changes still go through commands. Hidden on the title menu. The developer
-/// flag <c>--open-budget</c> opens the budget panel at start (for screenshots).
+/// The in-game interface over the city, laid out on the edges so the 3D view
+/// fills the rest:
+/// <list type="bullet">
+/// <item>top bar: the logo (opens the menu), readouts for date, treasury
+/// (normal, low under $1,000, in debt), net per month and population, and the
+/// Budget and Save buttons;</item>
+/// <item>tool palette (left): Query, Bulldoze, Road, a Power flyout (line,
+/// plant) and a Zones flyout (R, C, I), each flyout row with its cost;</item>
+/// <item>tool hint (bottom left): the tool's name, cost and what it does;</item>
+/// <item>bottom bar: R/C/I demand bars and the speed control (Pause, Snail,
+/// Fox, Falcon);</item>
+/// <item>toasts (top centre, at most three, 4.2 s): refusals, saves, the
+/// treasury going into the red, zones going dark;</item>
+/// <item>a cost tag by the cursor while placing (red when the city cannot pay);</item>
+/// <item>the query card (<see cref="QueryCard"/>) and the Budget and Save / Load
+/// windows (<see cref="BudgetWindow"/>, <see cref="SaveWindow"/>).</item>
+/// </list>
+/// It reads <see cref="CityController"/> every frame and changes only its tool,
+/// pause, speed and inspected tile; building and taxes go through commands.
+/// Only the interface is scaled (<see cref="UiScale"/>): this layer's transform,
+/// with the root sized to the window divided by the scale, so the 3D view
+/// keeps its native resolution. Breakpoints use that logical size.
+/// Hidden on the title menu. The developer flags <c>--open-budget</c>,
+/// <c>--open-saves</c>, <c>--open-zones</c> and <c>--inspect=x,y</c> open those at start (for screenshots).
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    private static readonly (TileKind Kind, string Key)[] Tools =
-    [
-        (TileKind.Residential, "1"),
-        (TileKind.Commercial, "2"),
-        (TileKind.Industrial, "3"),
-        (TileKind.Road, "4"),
-        (TileKind.PowerLine, "5"),
-        (TileKind.PowerPlant, "6"),
-        (TileKind.Empty, "0"),
-    ];
+    private const int TopBarHeight = 60;
+    private const int BottomBarHeight = 66;
+    private const int Edge = 12;
+    private const float ToastSeconds = 4.2f;
+    private const int MaxToasts = 3;
 
-    private static readonly Color Warning = new("f2c46b");
-    private static readonly Color Problem = new("e86f5c");
-    private static readonly Color Good = new("8fd18a");
-    private static readonly Color Dim = new(1, 1, 1, 0.6f);
+    private sealed record ToolSpec(TileKind? Kind, string Icon, string Key);
+
+    private static readonly ToolSpec Query = new(null, "query", "Q");
+    private static readonly ToolSpec Bulldoze = new(TileKind.Empty, "bulldoze", "B");
+    private static readonly ToolSpec Road = new(TileKind.Road, "road", "R");
+    private static readonly ToolSpec[] PowerTools = [new(TileKind.PowerLine, "line", "L"), new(TileKind.PowerPlant, "plant", "")];
+    private static readonly ToolSpec[] ZoneTools = [new(TileKind.Residential, "R", "1"), new(TileKind.Commercial, "C", "2"), new(TileKind.Industrial, "I", "3")];
 
     private CityController _city = null!;
     private ShellMenu _shell = null!;
+    private Control _root = null!;
+    private float _scale = 1f;
+    private Vector2 _logical;
     private readonly List<Control> _panels = new();
-    private readonly Dictionary<TileKind, Button> _toolButtons = new();
+
+    // top bar
+    private Readout _date = null!, _treasury = null!, _perMonth = null!, _population = null!;
+    private readonly List<Label> _menuLabels = new();
+    private readonly List<Button> _menuButtons = new();
+
+    // tools
+    private PanelContainer _palette = null!;
+    private readonly List<(Button Button, ToolSpec[] Members, bool Group)> _toolButtons = new();
+    private readonly Dictionary<ToolSpec[], PanelContainer> _flyouts = new();
+    private readonly Dictionary<ToolSpec[], ToolSpec> _groupChoice = new();
+    private readonly List<(Button Row, TileKind Kind)> _flyoutRows = new();
+    private Label _hintName = null!, _hintCost = null!, _hintText = null!;
+    private PanelContainer _costTag = null!;
+    private Label _costText = null!;
+
+    // bottom bar
+    private readonly RciBar[] _rci = new RciBar[3];
     private readonly List<Button> _speedButtons = new();
-    private Button _pauseButton = null!;
-    private Label _funds = null!;
-    private Label _net = null!;
-    private Control _budget = null!;
-    private Label _budgetNote = null!;
-    private readonly Dictionary<string, Label> _budgetValues = new();
-    private readonly Dictionary<ZoneKind, Label> _taxLabels = new();
-    private Label _date = null!;
-    private Label _power = null!;
-    private Label _people = null!;
-    private Label _demand = null!;
-    private Label _tile = null!;
-    private Label _quote = null!;
-    private Label _message = null!;
+
+    // toasts and query
+    private VBoxContainer _toasts = null!;
+    private QueryCard _query = null!;
+    private BudgetWindow _budget = null!;
+    private SaveWindow _saves = null!;
+    private long? _lastFunds;
+    private int _lastDark;
 
     public override void _Ready()
     {
         _city = GetNode<CityController>("../City");
         _shell = GetNode<ShellMenu>("../Shell");
         _city.IsOverUi = IsOverPanel;
+        _city.Message += (text, problem) => Toast(text, problem);
+        _city.CityReplaced += OnCityReplaced;
+        _shell.HandleEscape = HandleEscape;
+
+        // A theme does not pass through a CanvasLayer, so each layer's root control carries it.
+        _root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps, Theme = UiTheme.Theme };
+        AddChild(_root);
+
         BuildTopBar();
-        BuildToolbar();
-        BuildStatusBar();
-        BuildBudgetPanel();
-        _budget.Visible = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--open-budget") >= 0;
+        BuildBottomBar();
+        BuildPalette();
+        BuildHint();
+        _query = new QueryCard(() => _city.Inspected = null) { Visible = false };
+        _root.AddChild(_query);
+        _panels.Add(_query);
+        _toasts = Column(8);
+        _toasts.Alignment = BoxContainer.AlignmentMode.Begin;
+        _root.AddChild(_toasts);
+        BuildCostTag();
+        _budget = new BudgetWindow(_city);
+        _root.AddChild(_budget.Root);
+        _panels.Add(_budget.Root);
+        _saves = new SaveWindow(_city);
+        _saves.Loaded += OnCityReplaced;
+        _root.AddChild(_saves.Root);
+        _panels.Add(_saves.Root);
+
+        GetViewport().SizeChanged += ApplyScale;
+        ApplyScale();
+
+        var args = OS.GetCmdlineUserArgs();
+        if (System.Array.IndexOf(args, "--open-budget") >= 0) CallDeferred(nameof(OpenBudget));
+        if (System.Array.IndexOf(args, "--open-saves") >= 0) CallDeferred(nameof(OpenSaves));
+        if (System.Array.IndexOf(args, "--open-zones") >= 0) _flyouts[ZoneTools].Visible = true;
+        foreach (var arg in args)
+            if (arg.StartsWith("--inspect=") && arg[10..].Split(',') is [var xs, var ys] && int.TryParse(xs, out int ix) && int.TryParse(ys, out int iy))
+                CallDeferred(nameof(InspectAt), ix, iy);
+    }
+
+    private void InspectAt(int x, int y) => _city.Inspected = new Vector2I(x, y);
+
+    private void OpenBudget() => _budget.Open();
+    private void OpenSaves() => _saves.Open();
+
+    // --- scale and layout ---
+
+    private void ApplyScale()
+    {
+        var window = GetViewport().GetVisibleRect().Size;
+        _scale = UiScale.For(window.Y);
+        Scale = new Vector2(_scale, _scale);
+        _logical = (window / _scale).Floor();
+        _root.Size = _logical;
+
+        bool compact = _logical.Y < 760;
+        foreach (var (button, _, _) in _toolButtons)
+            button.CustomMinimumSize = new Vector2(compact ? 36 : 46, compact ? 36 : 46);
+        _palette.ResetSize();
+
+        bool labels = _logical.X >= 1280;
+        foreach (var label in _menuLabels) label.Visible = labels;
+        foreach (var button in _menuButtons) button.CustomMinimumSize = new Vector2(labels ? 56 : 44, labels ? 52 : 44);
+        _perMonth.Root.Visible = _logical.X >= 1000;
     }
 
     public override void _Process(double delta)
@@ -72,266 +159,551 @@ public partial class Hud : CanvasLayer
         if (!Visible) return;
         var sim = _city.Sim;
 
-        _funds.Text = Strings.Funds(sim.Funds);
-        _funds.Modulate = sim.Funds < 0 ? Problem : Colors.White;
-        _net.Text = sim.LastBudget is { } last ? Strings.MonthlyNet(last.Net) : "";
-        _net.Modulate = sim.LastBudget is { Net: < 0 } ? Problem : Good;
-        if (_budget.Visible) UpdateBudgetPanel(sim);
-        _date.Text = sim.Date.ToString();
-        _power.Text = Strings.Power(sim.Power.Demand, sim.Power.Supply);
-        _power.Modulate = sim.Power.ZonesWithoutSupply > 0 ? Warning : Colors.White;
-        _people.Text = Strings.People(sim.Residents, sim.CommercialJobs + sim.IndustrialJobs);
-        _demand.Text = Strings.DemandBars(sim.Demand.Residential, sim.Demand.Commercial, sim.Demand.Industrial);
-
-        foreach (var (kind, button) in _toolButtons) button.SetPressedNoSignal(kind == _city.Tool);
-        _pauseButton.SetPressedNoSignal(_city.Paused);
-        for (int i = 0; i < _speedButtons.Count; i++)
-            _speedButtons[i].SetPressedNoSignal(!_city.Paused && i == _city.SpeedIndex);
-
-        if (_city.Hover is { } h)
-        {
-            var tile = sim.Map[h.X, h.Y];
-            bool? powered = tile.IsZone ? sim.Power.IsPowered(h.X, h.Y) : null;
-            string name = Strings.TileName(tile.Kind);
-            if (tile.IsZone && sim.Content is { } content)
-                name = tile.Building.IsNone
-                    ? Strings.ZoneWaiting(name, Strings.WhyNot(sim.WhyNotGrowing(h.X, h.Y)))
-                    : Strings.Building(Strings.BuildingName(content[tile.Building].Id), sim.Stress(h.X, h.Y), sim.IsAbandoned(h.X, h.Y));
-            _tile.Text = Strings.TileStatus(h.X, h.Y, name, powered);
-        }
-        else
-        {
-            _tile.Text = "";
-        }
-
-        if (_city.PreviewCommand() is { } preview)
-        {
-            var quote = sim.Quote(preview);
-            _quote.Text = quote.Accepted ? Strings.Cost(quote.Cost) : Strings.Here(CityController.Describe(quote));
-            _quote.Modulate = quote.Accepted ? Colors.White : new Color("f2a07b");
-        }
-        else
-        {
-            _quote.Text = "";
-        }
-
-        if (_city.LastRefusal.Length > 0) Show(_message, _city.LastRefusal, Problem);
-        else if (sim.Power.ZonesWithoutSupply > 0)
-            Show(_message, Strings.PowerShort(sim.Power.ZonesWithoutSupply, sim.Power.Demand, sim.Power.Supply), Warning);
-        else if (_city.Notice.Length > 0) Show(_message, _city.Notice, Good);
-        else Show(_message, Strings.KeyHelp, Dim);
+        UpdateTopBar(sim);
+        UpdateTools(sim);
+        UpdateBottomBar(sim);
+        UpdateQuery(sim);
+        UpdateCostTag(sim);
+        _budget.Update(_logical);
+        _saves.Update(_logical);
+        PlaceFloating();
+        WatchCity(sim);
     }
 
-    private static void Show(Label label, string text, Color color)
+    private void PlaceFloating()
     {
-        label.Text = text;
-        label.Modulate = color;
+        _palette.Position = new Vector2(Edge, TopBarHeight + 16);
+        _hintCard.Position = new Vector2(84, _logical.Y - BottomBarHeight - 12 - _hintCard.Size.Y);
+        _query.Position = new Vector2(_logical.X - Edge - _query.Size.X, _logical.Y - BottomBarHeight - 12 - _query.Size.Y);
+        _toasts.ResetSize();
+        _toasts.Position = new Vector2(Mathf.Floor((_logical.X - _toasts.Size.X) / 2), 122);
+        foreach (var (members, flyout) in _flyouts)
+        {
+            if (!flyout.Visible) continue;
+            var button = _toolButtons.Find(t => t.Members == members).Button;
+            flyout.ResetSize();
+            flyout.Position = new Vector2(_palette.Position.X + _palette.Size.X + 8, button.GetGlobalRect().Position.Y - 8);
+        }
     }
 
     // Panels swallow clicks, and the city view asks here so it does not preview under them.
     private bool IsOverPanel(Vector2 screen)
     {
         if (!Visible) return false;
+        var point = screen / _scale;
         foreach (var panel in _panels)
-            if (panel.Visible && panel.GetGlobalRect().HasPoint(screen)) return true;
+            if (panel.IsVisibleInTree() && panel.GetGlobalRect().HasPoint(point)) return true;
         return false;
     }
 
-    private PanelContainer Panel(Control.LayoutPreset preset)
+    private bool HandleEscape()
     {
-        var panel = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
-        AddChild(panel);
-        // Presets keep the size a panel had when set, so set again whenever its contents resize it.
-        void Place() => panel.SetAnchorsAndOffsetsPreset(preset, Control.LayoutPresetMode.KeepSize, 8);
-        Place();
-        panel.Resized += Place;
-        _panels.Add(panel);
-        return panel;
+        if (_budget.IsOpen) { _budget.Close(); return true; }
+        if (_saves.IsOpen) { _saves.Close(); return true; }
+        if (CloseFlyouts()) return true;
+        if (_city.Inspected is not null) { _city.Inspected = null; return true; }
+        if (_city.Tool is not null) { _city.Tool = null; return true; }
+        return false;
     }
+
+    private void OnCityReplaced()
+    {
+        _budget.Reset();
+        _lastFunds = null;
+        _lastDark = 0;
+    }
+
+    // --- top bar ---
 
     private void BuildTopBar()
     {
-        var panel = Panel(Control.LayoutPreset.TopWide);
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 18);
-        panel.AddChild(row);
+        var style = UiTheme.Box(Ui.Panel, Ui.Ink, 0, 0, 0, Edge, 0);
+        style.BorderWidthBottom = 2;
+        var bar = Box(style);
+        bar.MouseFilter = Control.MouseFilterEnum.Stop;
+        bar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+        bar.CustomMinimumSize = new Vector2(0, TopBarHeight);
+        _root.AddChild(bar);
+        _panels.Add(bar);
 
-        _funds = new Label();
-        _net = new Label();
-        _date = new Label();
-        _power = new Label();
-        _people = new Label();
-        _demand = new Label();
-        var money = new HBoxContainer();
-        money.AddThemeConstantOverride("separation", 6);
-        money.AddChild(_funds);
-        money.AddChild(_net);
-        row.AddChild(money);
-        row.AddChild(_date);
-        row.AddChild(_power);
-        row.AddChild(_people);
-        row.AddChild(_demand);
-        row.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+        var row = Row(16);
+        bar.AddChild(row);
 
-        var speeds = new HBoxContainer();
-        speeds.AddThemeConstantOverride("separation", 2);
-        row.AddChild(speeds);
-        _pauseButton = new Button { Text = Strings.PauseButton, ToggleMode = true, FocusMode = Control.FocusModeEnum.None };
-        _pauseButton.Pressed += () => _city.Paused = !_city.Paused;
-        speeds.AddChild(_pauseButton);
-        for (int i = 0; i < CityController.SpeedSteps.Count; i++)
+        var logo = new Button
+        {
+            Text = Strings.GameTitle,
+            ThemeTypeVariation = UiTheme.PrimaryButton,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = Strings.MenuTip,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+            CustomMinimumSize = new Vector2(0, 42),
+        };
+        logo.AddThemeFontOverride("font", UiFonts.Title);
+        logo.AddThemeFontSizeOverride("font_size", 17);
+        logo.Pressed += _shell.OpenPause;
+        row.AddChild(logo);
+        row.AddChild(new Control { CustomMinimumSize = new Vector2(4, 0) });
+
+        _date = Readout(Strings.ReadoutDate, 124);
+        _treasury = Readout(Strings.ReadoutTreasury, 112);
+        _perMonth = Readout(Strings.ReadoutPerMonth, 96);
+        _population = Readout(Strings.ReadoutPopulation, 96);
+        foreach (var r in new[] { _date, _treasury, _perMonth, _population }) row.AddChild(r.Root);
+
+        row.AddChild(Spacer());
+        row.AddChild(MenuButton("budget", Strings.BudgetButton, () => { _saves.Close(); _budget.Toggle(); }));
+        row.AddChild(MenuButton("save", Strings.SaveButton, () => { _budget.Close(); _saves.Toggle(); }));
+    }
+
+    private Button MenuButton(string icon, string label, System.Action onPress)
+    {
+        var button = new Button
+        {
+            ThemeTypeVariation = UiTheme.ToolButton,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = label,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+        };
+        button.AddThemeStyleboxOverride("normal", UiTheme.Box(Ui.PanelHi, Ui.Ink, 2, 6, UiTheme.ControlShadow));
+        button.AddThemeStyleboxOverride("hover", UiTheme.Box(Ui.PanelLo, Ui.Ink, 2, 6, UiTheme.ControlShadow));
+        button.AddThemeStyleboxOverride("pressed", UiTheme.Pressed(UiTheme.Box(Ui.PanelLo, Ui.Ink, 2, 6, UiTheme.ControlShadow), Ui.PanelLo, UiTheme.ControlShadow));
+        button.Pressed += onPress;
+        var caption = Upper(label, UiTheme.Micro, Ui.Ink);
+        caption.HorizontalAlignment = HorizontalAlignment.Center;
+        caption.AddThemeFontSizeOverride("font_size", 9);
+        var inner = Column(1, UiIcons.Rect(icon, Ui.Ink, 22), caption);
+        inner.Alignment = BoxContainer.AlignmentMode.Center;
+        inner.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        button.AddChild(inner);
+        _menuLabels.Add(caption);
+        _menuButtons.Add(button);
+        return button;
+    }
+
+    private void UpdateTopBar(Simulation sim)
+    {
+        _date.Value.Text = Strings.Date(sim.Date);
+        ShowTreasury(_treasury, sim.Funds, captions: true);
+        if (sim.LastBudget is { } last)
+        {
+            _perMonth.Value.Text = Strings.Signed(last.Net);
+            _perMonth.Value.AddThemeColorOverride("font_color", last.Net < 0 ? Ui.DebtText : Ui.LcdText);
+            _perMonth.Well.AddThemeStyleboxOverride("panel", UiTheme.WellBox());
+        }
+        else
+        {
+            // No month settled yet: the "no data" look.
+            _perMonth.Value.Text = Strings.NoData;
+            _perMonth.Value.AddThemeColorOverride("font_color", Ui.LcdOff);
+            var off = UiTheme.WellBox(Ui.LcdTrack);
+            off.BorderWidthTop = 0;
+            off.ContentMarginTop = 0;
+            _perMonth.Well.AddThemeStyleboxOverride("panel", off);
+        }
+        _population.Value.Text = Strings.Count(sim.Residents);
+    }
+
+    /// <summary>The treasury's three looks: normal, low (under $1,000) and in debt (below $0).</summary>
+    public static void ShowTreasury(Readout r, long funds, bool captions, int padX = 10, int padY = 0)
+    {
+        r.Value.Text = Strings.Money(funds);
+        if (funds < 0)
+        {
+            r.Value.AddThemeColorOverride("font_color", Ui.DebtText);
+            r.Well.AddThemeStyleboxOverride("panel", UiTheme.WellBox(Ui.DebtWell, ring: Ui.Danger, padX: padX, padY: padY));
+            if (captions) { r.Caption.Text = Strings.ReadoutTreasuryDebt; r.Caption.AddThemeColorOverride("font_color", Ui.DangerText); }
+        }
+        else
+        {
+            r.Value.AddThemeColorOverride("font_color", funds < 1000 ? Ui.LcdLow : Ui.LcdText);
+            r.Well.AddThemeStyleboxOverride("panel", UiTheme.WellBox(padX: padX, padY: padY));
+            if (captions)
+            {
+                r.Caption.Text = funds < 1000 ? Strings.ReadoutTreasuryLow : Strings.ReadoutTreasury;
+                r.Caption.AddThemeColorOverride("font_color", funds < 1000 ? Ui.LowLabel : Ui.Muted);
+            }
+        }
+    }
+
+    // --- tool palette, flyouts and hint ---
+
+    private void BuildPalette()
+    {
+        _palette = Box(UiTheme.PanelBox(6));
+        _palette.MouseFilter = Control.MouseFilterEnum.Stop;
+        _root.AddChild(_palette);
+        _panels.Add(_palette);
+        var column = Column(4);
+        _palette.AddChild(column);
+
+        column.AddChild(ToolButton([Query], group: false));
+        column.AddChild(ToolButton([Bulldoze], group: false));
+        column.AddChild(ToolButton([Road], group: false));
+        column.AddChild(ToolButton(PowerTools, group: true));
+        column.AddChild(ToolButton(ZoneTools, group: true));
+        _groupChoice[PowerTools] = PowerTools[0];
+        _groupChoice[ZoneTools] = ZoneTools[0];
+        BuildFlyout(PowerTools, Strings.PowerGroup);
+        BuildFlyout(ZoneTools, Strings.ZonesGroup);
+    }
+
+    private Button ToolButton(ToolSpec[] members, bool group)
+    {
+        var first = members[0];
+        var button = new Button
+        {
+            ThemeTypeVariation = UiTheme.ToolButton,
+            Icon = UiIcons.Get(first.Icon),
+            IconAlignment = HorizontalAlignment.Center,
+            ToggleMode = true,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = group ? (members == PowerTools ? Strings.PowerGroup : Strings.ZonesGroup) : Strings.ToolTip(first.Key, first.Kind is { } k ? Strings.ToolName(k) : Strings.QueryName),
+            CustomMinimumSize = new Vector2(46, 46),
+        };
+        if (group)
+        {
+            button.AddChild(new CornerMark());
+            button.Pressed += () => ToggleFlyout(members);
+        }
+        else
+        {
+            button.Pressed += () => { CloseFlyouts(); _city.Tool = first.Kind; };
+        }
+        _toolButtons.Add((button, members, group));
+        return button;
+    }
+
+    private void BuildFlyout(ToolSpec[] members, string title)
+    {
+        var flyout = Box(UiTheme.PanelBox(8));
+        flyout.MouseFilter = Control.MouseFilterEnum.Stop;
+        flyout.Visible = false;
+        var column = Column(4, Upper(title, UiTheme.Overline));
+        flyout.AddChild(column);
+        var prices = _city.Sim.Prices;
+        foreach (var spec in members)
+        {
+            var kind = spec.Kind!.Value;
+            var row = new Button
+            {
+                ThemeTypeVariation = UiTheme.ToolButton,
+                ToggleMode = true,
+                FocusMode = Control.FocusModeEnum.None,
+                CustomMinimumSize = new Vector2(224, 40),
+                TooltipText = Strings.ToolTip(spec.Key, Strings.ToolName(kind)),
+            };
+            var swatch = ToolSwatch(spec);
+            swatch.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+            var name = Text(Strings.ToolName(kind), UiTheme.Strong);
+            var cost = Text(Strings.ToolCost(prices.Build(kind), perTile: kind != TileKind.PowerPlant), UiTheme.LcdSmall, Ui.Primary);
+            var key = Text(spec.Key, UiTheme.LcdSmall, Ui.Muted);
+            key.CustomMinimumSize = new Vector2(12, 0);
+            var content = Row(10, swatch, name, Spacer(), cost, key);
+            var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            margin.AddThemeConstantOverride("margin_left", 6);
+            margin.AddThemeConstantOverride("margin_right", 8);
+            margin.AddChild(content);
+            row.AddChild(margin);
+            row.Pressed += () =>
+            {
+                _groupChoice[members] = spec;
+                _city.Tool = kind;
+                CloseFlyouts();
+            };
+            column.AddChild(row);
+            _flyoutRows.Add((row, kind));
+            // The name and cost go cream on the selected row.
+            row.Toggled += on =>
+            {
+                name.AddThemeColorOverride("font_color", on ? Ui.OnPrimary : Ui.Ink);
+                cost.AddThemeColorOverride("font_color", on ? Ui.OnPrimary : Ui.Primary);
+                key.AddThemeColorOverride("font_color", on ? Ui.ToggleOff : Ui.Muted);
+            };
+        }
+        _root.AddChild(flyout);
+        _panels.Add(flyout);
+        _flyouts[members] = flyout;
+    }
+
+    private static PanelContainer ToolSwatch(ToolSpec spec) => spec.Kind switch
+    {
+        TileKind.Residential => Swatch(Ui.ZoneR, 28, icon: "R"),
+        TileKind.Commercial => Swatch(Ui.ZoneC, 28, icon: "C"),
+        TileKind.Industrial => Swatch(Ui.ZoneI, 28, icon: "I", onColor: Ui.Ink),
+        _ => Swatch(Ui.PowerSwatch, 28, icon: spec.Icon, onColor: Ui.Ink),
+    };
+
+    private void ToggleFlyout(ToolSpec[] members)
+    {
+        bool open = !_flyouts[members].Visible;
+        CloseFlyouts();
+        _flyouts[members].Visible = open;
+    }
+
+    private bool CloseFlyouts()
+    {
+        bool any = false;
+        foreach (var flyout in _flyouts.Values)
+        {
+            any |= flyout.Visible;
+            flyout.Visible = false;
+        }
+        return any;
+    }
+
+    private PanelContainer _hintCard = null!;
+
+    private void BuildHint()
+    {
+        _hintCard = new PanelContainer { ThemeTypeVariation = UiTheme.CardPanel, MouseFilter = Control.MouseFilterEnum.Stop, CustomMinimumSize = new Vector2(260, 0) };
+        _hintName = Text("", UiTheme.Heading);
+        _hintCost = Text("", UiTheme.LcdLabel, Ui.Primary, HorizontalAlignment.Right);
+        _hintText = Text("", UiTheme.Small, Ui.Ink);
+        _hintText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _hintText.CustomMinimumSize = new Vector2(236, 0);
+        _hintCard.AddChild(Column(2, Row(8, _hintName, Spacer(), _hintCost), _hintText));
+        _root.AddChild(_hintCard);
+        _panels.Add(_hintCard);
+    }
+
+    private void UpdateTools(Simulation sim)
+    {
+        var tool = _city.Tool;
+        foreach (var (button, members, group) in _toolButtons)
+        {
+            bool selected = System.Array.Exists(members, m => m.Kind == tool);
+            if (group && selected) _groupChoice[members] = System.Array.Find(members, m => m.Kind == tool)!;
+            if (group) button.Icon = UiIcons.Get(_groupChoice[members].Icon);
+            button.SetPressedNoSignal(selected || (group && _flyouts[members].Visible));
+        }
+        foreach (var (row, rowKind) in _flyoutRows)
+            if (row.ButtonPressed != (rowKind == tool)) row.ButtonPressed = rowKind == tool;
+
+        string name, cost, text;
+        if (tool is not { } kind)
+        {
+            name = Strings.QueryName;
+            cost = Strings.Free;
+            text = Strings.QueryHint;
+        }
+        else
+        {
+            name = Strings.ToolName(kind);
+            long price = kind == TileKind.Empty ? sim.Prices.Demolish : sim.Prices.Build(kind);
+            cost = Strings.ToolCost(price, perTile: kind != TileKind.PowerPlant);
+            text = Strings.ToolHint(kind, sim.Growth.RoadAccess, sim.Prices.LineCrossing);
+        }
+        if (_hintName.Text != name || _hintText.Text != text)
+        {
+            _hintName.Text = name;
+            _hintCost.Text = cost;
+            _hintText.Text = text;
+            _hintCard.ResetSize();
+        }
+    }
+
+    // --- cost tag by the cursor ---
+
+    private void BuildCostTag()
+    {
+        _costText = Text("", UiTheme.LcdSmall);
+        _costTag = Box(UiTheme.WellBox(padX: 6), _costText);
+        _costTag.Visible = false;
+        _root.AddChild(_costTag);
+    }
+
+    private void UpdateCostTag(Simulation sim)
+    {
+        var preview = _city.Active && !_city.PointerOverUi() ? _city.PreviewCommand() : null;
+        if (preview is null) { _costTag.Visible = false; return; }
+        var quote = sim.Quote(preview);
+        bool short_ = quote.Refusal == Refusal.InsufficientFunds;
+        if (!quote.Accepted && !short_) { _costTag.Visible = false; return; }
+        _costTag.Visible = true;
+        _costText.Text = Strings.Money(quote.Cost);
+        _costText.AddThemeColorOverride("font_color", short_ ? Ui.DebtText : Ui.LcdText);
+        _costTag.AddThemeStyleboxOverride("panel", short_ ? UiTheme.WellBox(Ui.DebtWell, ring: Ui.Danger, padX: 6) : UiTheme.WellBox(padX: 6));
+        _costTag.ResetSize();
+        _costTag.Position = (GetViewport().GetMousePosition() / _scale + new Vector2(18, 14)).Floor();
+    }
+
+    // --- bottom bar ---
+
+    private void BuildBottomBar()
+    {
+        var style = UiTheme.Box(Ui.Panel, Ui.Ink, 0, 0, 0, Edge, 0);
+        style.BorderWidthTop = 2;
+        var bar = Box(style);
+        bar.MouseFilter = Control.MouseFilterEnum.Stop;
+        bar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
+        bar.CustomMinimumSize = new Vector2(0, BottomBarHeight);
+        bar.GrowVertical = Control.GrowDirection.Begin;
+        _root.AddChild(bar);
+        _panels.Add(bar);
+
+        var row = Row(16);
+        bar.AddChild(row);
+
+        // R/C/I demand on the LCD.
+        var bars = Row(10);
+        var zones = new[] { (ZoneKind.Residential, "R"), (ZoneKind.Commercial, "C"), (ZoneKind.Industrial, "I") };
+        for (int i = 0; i < 3; i++)
+        {
+            var (zone, letter) = zones[i];
+            _rci[i] = new RciBar { Color = Ui.ZoneLcd(zone) };
+            var label = Text(letter, UiTheme.LcdSmall, Ui.ZoneLcd(zone), HorizontalAlignment.Center);
+            label.AddThemeConstantOverride("line_spacing", 0);
+            bars.AddChild(Column(0, _rci[i], label));
+        }
+        var well = UiTheme.WellBox(padX: 10, padY: 3);
+        well.BorderWidthTop = 2;
+        var rciBox = Box(well, bars);
+        rciBox.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        rciBox.TooltipText = "R C I demand";
+        row.AddChild(rciBox);
+
+        // Pause / Snail / Fox / Falcon.
+        var group = Box(UiTheme.Box(Ui.Ink, Ui.Ink, 2, 6, UiTheme.ControlShadow));
+        group.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var cells = Row(0);
+        group.AddChild(cells);
+        string[] icons = ["pause", "snail", "fox", "falcon"];
+        for (int i = 0; i < icons.Length; i++)
         {
             int index = i;
-            var button = new Button { Text = Strings.Speed(CityController.SpeedSteps[i]), ToggleMode = true, FocusMode = Control.FocusModeEnum.None };
-            button.Pressed += () => { _city.SpeedIndex = index; _city.Paused = false; };
-            speeds.AddChild(button);
-            _speedButtons.Add(button);
-        }
-
-        var budget = new Button { Text = Strings.BudgetButton, FocusMode = Control.FocusModeEnum.None };
-        budget.Pressed += () => _budget.Visible = !_budget.Visible;
-        row.AddChild(budget);
-
-        var menu = new Button { Text = Strings.MenuButton, FocusMode = Control.FocusModeEnum.None };
-        menu.Pressed += _shell.OpenPause;
-        row.AddChild(menu);
-    }
-
-    private void BuildToolbar()
-    {
-        var panel = Panel(Control.LayoutPreset.CenterLeft);
-        var column = new VBoxContainer();
-        column.AddThemeConstantOverride("separation", 4);
-        panel.AddChild(column);
-        column.AddChild(new Label { Text = Strings.ToolsHeading, HorizontalAlignment = HorizontalAlignment.Center });
-
-        var prices = _city.Sim.Prices;
-        foreach (var (kind, key) in Tools)
-        {
-            bool bulldoze = kind == TileKind.Empty;
-            long price = bulldoze ? prices.Demolish : prices.Build(kind);
-            string name = Strings.ToolName(kind);
-            var button = new Button
+            var cell = new Button
             {
-                Text = Strings.ToolButton(name, price),
-                Icon = Swatch(bulldoze ? new Color("8a6f5a") : Palette.For(kind)),
+                ThemeTypeVariation = UiTheme.SegmentButton,
+                Text = Strings.SpeedNames[i],
+                Icon = UiIcons.Get(icons[i]),
+                IconAlignment = HorizontalAlignment.Center,
+                VerticalIconAlignment = VerticalAlignment.Top,
                 ToggleMode = true,
-                Alignment = HorizontalAlignment.Left,
                 FocusMode = Control.FocusModeEnum.None,
-                TooltipText = Strings.ToolTip(key, name, price, perTile: kind != TileKind.PowerPlant),
-                CustomMinimumSize = new Vector2(190, 0),
+                TooltipText = Strings.SpeedTips[i],
+                CustomMinimumSize = new Vector2(62, 42),
             };
-            var tool = kind;
-            button.Pressed += () => _city.Tool = tool;
-            column.AddChild(button);
-            _toolButtons[kind] = button;
+            UiTheme.StyleSegment(cell, first: i == 0, last: i == icons.Length - 1);
+            cell.Pressed += () =>
+            {
+                if (index == 0) _city.Paused = true;
+                else { _city.SpeedIndex = index - 1; _city.Paused = false; }
+            };
+            cells.AddChild(cell);
+            _speedButtons.Add(cell);
         }
+        row.AddChild(group);
     }
 
-    private void BuildStatusBar()
+    private void UpdateBottomBar(Simulation sim)
     {
-        var panel = Panel(Control.LayoutPreset.BottomWide);
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 24);
-        panel.AddChild(row);
-        _tile = new Label { CustomMinimumSize = new Vector2(260, 0) };
-        _quote = new Label { CustomMinimumSize = new Vector2(200, 0) };
-        _message = new Label { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipText = true };
-        row.AddChild(_tile);
-        row.AddChild(_quote);
-        row.AddChild(_message);
+        _rci[0].Demand = sim.Demand.Residential;
+        _rci[1].Demand = sim.Demand.Commercial;
+        _rci[2].Demand = sim.Demand.Industrial;
+        for (int i = 0; i < _speedButtons.Count; i++)
+            _speedButtons[i].SetPressedNoSignal(i == 0 ? _city.Paused : !_city.Paused && i - 1 == _city.SpeedIndex);
     }
 
-    // Last month's money on the right of the screen, and the three tax rates.
-    private void BuildBudgetPanel()
-    {
-        var panel = Panel(Control.LayoutPreset.CenterRight);
-        _budget = panel;
-        panel.VisibilityChanged += () => { if (panel.Visible) panel.ResetSize(); };
-        var column = new VBoxContainer { CustomMinimumSize = new Vector2(230, 0) };
-        column.AddThemeConstantOverride("separation", 4);
-        panel.AddChild(column);
-        column.AddChild(new Label { Text = Strings.BudgetHeading, HorizontalAlignment = HorizontalAlignment.Center });
-        _budgetNote = new Label { Text = Strings.BudgetNotYet, Modulate = Dim, HorizontalAlignment = HorizontalAlignment.Center };
-        column.AddChild(_budgetNote);
+    // --- query card ---
 
-        var grid = new GridContainer { Columns = 2 };
-        grid.AddThemeConstantOverride("h_separation", 16);
-        column.AddChild(grid);
-        void Line(string key, string name, Color? color = null)
+    private void UpdateQuery(Simulation sim)
+    {
+        if (_city.Inspected is { } at && sim.Map.InBounds(at.X, at.Y))
         {
-            var label = new Label { Text = name, Modulate = color ?? Colors.White, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            grid.AddChild(label);
-            var value = new Label { HorizontalAlignment = HorizontalAlignment.Right, CustomMinimumSize = new Vector2(80, 0), Modulate = color ?? Colors.White };
-            grid.AddChild(value);
-            value.VisibilityChanged += () => label.Visible = value.Visible;
-            _budgetValues[key] = value;
+            _query.Visible = true;
+            _query.Display(sim.Inspect(at.X, at.Y), sim);
         }
-        Line("taxHeading", Strings.BudgetIncome, Dim);
-        foreach (var zone in Zones) Line(zone.ToString(), Strings.ZoneName(zone));
-        Line("income", Strings.BudgetTotal, Dim);
-        Line("upkeepHeading", Strings.BudgetUpkeep, Dim);
-        Line("roads", Strings.BudgetRoads);
-        Line("lines", Strings.BudgetPowerLines);
-        Line("plants", Strings.BudgetPlants);
-        Line("zones", Strings.BudgetZones);
-        Line("expenses", Strings.BudgetTotal, Dim);
-        Line("net", Strings.BudgetNet);
-
-        column.AddChild(new HSeparator());
-        column.AddChild(new Label { Text = Strings.TaxHeading, HorizontalAlignment = HorizontalAlignment.Center });
-        var taxes = new GridContainer { Columns = 4, TooltipText = Strings.TaxTip(_city.Sim.Growth.NeutralTax) };
-        taxes.AddThemeConstantOverride("h_separation", 8);
-        column.AddChild(taxes);
-        foreach (var zone in Zones)
+        else
         {
-            var z = zone;
-            taxes.AddChild(new Label { Text = Strings.ZoneName(zone), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-            var down = new Button { Text = Strings.TaxDown, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(28, 0) };
-            down.Pressed += () => _city.ChangeTax(z, -1);
-            taxes.AddChild(down);
-            var rate = new Label { HorizontalAlignment = HorizontalAlignment.Center, CustomMinimumSize = new Vector2(40, 0) };
-            taxes.AddChild(rate);
-            _taxLabels[zone] = rate;
-            var up = new Button { Text = Strings.TaxUp, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(28, 0) };
-            up.Pressed += () => _city.ChangeTax(z, +1);
-            taxes.AddChild(up);
+            _query.Visible = false;
         }
     }
 
-    private static readonly ZoneKind[] Zones = [ZoneKind.Residential, ZoneKind.Commercial, ZoneKind.Industrial];
+    // --- toasts ---
 
-    private void UpdateBudgetPanel(Simulation sim)
+    private void WatchCity(Simulation sim)
     {
-        var b = sim.LastBudget ?? default;
-        bool noteWas = _budgetNote.Visible, zonesWere = _budgetValues["zones"].Visible;
-        foreach (var zone in Zones) _budgetValues[zone.ToString()].Text = Strings.Money(b.TaxFor(zone));
-        _budgetValues["taxHeading"].Text = "";
-        _budgetValues["upkeepHeading"].Text = "";
-        _budgetValues["income"].Text = Strings.Money(b.Income);
-        _budgetValues["roads"].Text = Strings.Money(b.RoadUpkeep);
-        _budgetValues["lines"].Text = Strings.Money(b.PowerLineUpkeep);
-        _budgetValues["plants"].Text = Strings.Money(b.PlantUpkeep);
-        _budgetValues["zones"].Text = Strings.Money(b.ZoneUpkeep);
-        _budgetValues["zones"].Visible = b.ZoneUpkeep != 0; // only content that gives zones upkeep
-        _budgetNote.Visible = sim.LastBudget is null;
-        // A panel keeps its size when its contents shrink; shrink it to fit again.
-        if (noteWas != _budgetNote.Visible || zonesWere != _budgetValues["zones"].Visible) _budget.ResetSize();
-        _budgetValues["expenses"].Text = Strings.Money(b.Expenses);
-        _budgetValues["net"].Text = Strings.Signed(b.Net);
-        _budgetValues["net"].Modulate = b.Net < 0 ? Problem : Good;
-        foreach (var zone in Zones)
+        if (_lastFunds is { } before && before >= 0 && sim.Funds < 0) Toast(Strings.InDebt, problem: true);
+        _lastFunds = sim.Funds;
+        int dark = sim.Power.ZonesWithoutSupply;
+        if (dark > 0 && _lastDark == 0) Toast(Strings.PowerShort(dark), problem: true);
+        _lastDark = dark;
+    }
+
+    /// <summary>Show a toast for 4.2 seconds; with three up, the oldest goes.</summary>
+    public void Toast(string text, bool problem)
+    {
+        while (_toasts.GetChildCount() >= MaxToasts)
         {
-            int rate = _city.TaxShown(zone);
-            _taxLabels[zone].Text = Strings.TaxRate(rate);
-            _taxLabels[zone].Modulate = rate > sim.Growth.NeutralTax ? Warning : rate < sim.Growth.NeutralTax ? Good : Colors.White;
+            var oldest = _toasts.GetChild(0);
+            _toasts.RemoveChild(oldest);
+            oldest.QueueFree();
         }
+        var icon = Swatch(problem ? Ui.Accent : Ui.Primary, 28, icon: problem ? "warning" : "check", onColor: Ui.OnPrimary);
+        icon.AddThemeStyleboxOverride("panel", UiTheme.Box(problem ? Ui.Accent : Ui.Primary, Ui.Ink, 2, 14));
+        icon.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var label = Text(text, UiTheme.Strong);
+        label.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var style = UiTheme.Box(Ui.PanelHi, Ui.Ink, 2, 22, UiTheme.PanelShadow, 8, 6);
+        style.ContentMarginRight = 16;
+        var toast = Box(style, Row(10, icon, label));
+        toast.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        _toasts.AddChild(toast);
+        var tween = toast.CreateTween();
+        tween.TweenInterval(ToastSeconds - 0.3f);
+        tween.TweenProperty(toast, "modulate:a", 0f, 0.3f);
+        tween.TweenCallback(Callable.From(toast.QueueFree));
+    }
+}
+
+/// <summary>One demand bar on the LCD: a 14 x 30 track with a zero line; the bar grows up or down from it, 15 px at full demand.</summary>
+public partial class RciBar : Control
+{
+    private int _demand;
+
+    public Color Color { get; set; }
+
+    public int Demand
+    {
+        get => _demand;
+        set { if (_demand != value) { _demand = value; QueueRedraw(); } }
     }
 
-    private static ImageTexture Swatch(Color color)
+    public RciBar()
     {
-        var image = Image.CreateEmpty(14, 14, false, Image.Format.Rgba8);
-        image.Fill(color);
-        return ImageTexture.CreateFromImage(image);
+        CustomMinimumSize = new Vector2(14, 30);
+        MouseFilter = MouseFilterEnum.Ignore;
+        SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
     }
+
+    public override void _Draw()
+    {
+        DrawRect(new Rect2(Vector2.Zero, Size), Palette.Ui.LcdTrack);
+        float mid = Size.Y / 2;
+        float height = Mathf.Clamp(Mathf.Abs(_demand) / 1000f, 0, 1) * 15f;
+        if (height > 0)
+            DrawRect(_demand > 0 ? new Rect2(0, mid - height, Size.X, height) : new Rect2(0, mid, Size.X, height), Color);
+        DrawLine(new Vector2(0, mid), new Vector2(Size.X, mid), Palette.Ui.LcdText.Darkened(0.35f), 1);
+    }
+}
+
+/// <summary>The small corner triangle that marks a tool button with a flyout.</summary>
+public partial class CornerMark : Control
+{
+    public CornerMark()
+    {
+        MouseFilter = MouseFilterEnum.Ignore;
+        SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+    }
+
+    public override void _Draw()
+    {
+        var parent = GetParent<Button>();
+        var color = parent.ButtonPressed ? Palette.Ui.OnPrimary : Palette.Ui.Ink;
+        var s = Size;
+        DrawColoredPolygon([new Vector2(s.X - 4, s.Y - 10), new Vector2(s.X - 4, s.Y - 4), new Vector2(s.X - 10, s.Y - 4)], color);
+    }
+
+    public override void _Process(double delta) => QueueRedraw();
 }

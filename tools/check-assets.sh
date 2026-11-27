@@ -7,7 +7,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-allowed='CC0-1.0|CC-BY-3.0|CC-BY-4.0'
+allowed='CC0-1.0|CC-BY-3.0|CC-BY-4.0|OFL-1.1'
 fail=0
 
 if [ ! -d game/assets ]; then

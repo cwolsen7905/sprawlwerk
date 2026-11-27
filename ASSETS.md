@@ -2,7 +2,8 @@
 
 Every file under `game/assets/` is listed here with its source and licence.
 `tools/check-assets.sh` fails CI when a file is missing from this list or
-its licence is not one of: `CC0-1.0`, `CC-BY-3.0`, `CC-BY-4.0`.
+its licence is not one of: `CC0-1.0`, `CC-BY-3.0`, `CC-BY-4.0`, `OFL-1.1`
+(SIL Open Font License, for fonts only).
 The credits screen is built from this list.
 
 Files were renamed on the way in; the original name is in the Notes column.
@@ -20,6 +21,12 @@ kit's shared texture (`Textures/colormap.png`).
 | `game/assets/models/kenney/city-kit-industrial/` | City Kit (Industrial) | Kenney | https://kenney.nl/assets/city-kit-industrial | CC0-1.0 | `building-c` and `chimney-large` (power plant); `building-a`, `b`, `d`, `e`, `f`, `g` (grown industry), GLB; `License.txt` included |
 | `game/assets/models/kenney/city-kit-suburban/` | City Kit (Suburban) | Kenney | https://kenney.nl/assets/city-kit-suburban | CC0-1.0 | `building-type-a` to `f` (grown houses), GLB; `License.txt` included |
 | `game/assets/models/kenney/city-kit-commercial/` | City Kit (Commercial) | Kenney | https://kenney.nl/assets/city-kit-commercial | CC0-1.0 | `building-a` to `f` (grown shops), GLB; `License.txt` included |
+
+## Interface
+
+| File | Title | Author | Source | Licence | Notes |
+|---|---|---|---|---|---|
+| `game/assets/ui/icons/` | SprawlWerk UI icons | SprawlWerk contributors (made with Claude Design) | Drawn for this project | CC0-1.0 | 31 SVGs, 20 × 20, stroked in currentColor; kept as delivered, with their embedded provenance metadata |
 
 ## Sound effects
 

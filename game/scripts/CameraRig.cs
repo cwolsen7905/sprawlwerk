@@ -9,9 +9,11 @@ namespace SprawlWerk;
 /// classic isometric view while the street level keeps some perspective.
 ///
 /// Input (only while <see cref="Enabled"/>): WASD or the arrow keys pan relative
-/// to the view, right-drag drags the ground, the wheel zooms toward the cursor,
-/// Q and E or middle-drag rotate, middle-drag up and down also tilts. The pivot
-/// stays on the map and the pitch stays between a low angle and straight down.
+/// to the view, right-drag drags the ground (left-drag too while
+/// <see cref="LeftDragPans"/> says so: the query tool), the wheel zooms toward
+/// the cursor, + and - zoom at the middle of the view, comma and period or
+/// middle-drag rotate (Q is the query tool), middle-drag up and down also tilts.
+/// The pivot stays on the map and the pitch stays between a low angle and straight down.
 /// </summary>
 public partial class CameraRig : Node3D
 {
@@ -37,6 +39,9 @@ public partial class CameraRig : Node3D
 
     /// <summary>Set by the owner: true when the mouse is over the HUD, so the wheel is left alone.</summary>
     public System.Func<bool>? PointerOverUi { get; set; }
+
+    /// <summary>Set by the owner: true when a left-drag should pan the view (the query tool builds nothing).</summary>
+    public System.Func<bool>? LeftDragPans { get; set; }
 
     public Camera3D Camera => _camera;
 
@@ -81,8 +86,8 @@ public partial class CameraRig : Node3D
         if (move != Vector2.Zero) Pan(move.Normalized() * _distance * KeyPanSpeed * dt);
 
         float turn = 0;
-        if (Input.IsKeyPressed(Key.Q)) turn += 1;
-        if (Input.IsKeyPressed(Key.E)) turn -= 1;
+        if (Input.IsKeyPressed(Key.Comma)) turn += 1;
+        if (Input.IsKeyPressed(Key.Period)) turn -= 1;
         if (turn != 0) { _yaw += turn * KeyTurnSpeed * dt; Place(); }
     }
 
@@ -99,8 +104,17 @@ public partial class CameraRig : Node3D
                 ZoomAt(mb.Position, ZoomStep);
                 break;
 
-            case InputEventMouseMotion motion when (motion.ButtonMask & MouseButtonMask.Right) != 0:
+            case InputEventMouseMotion motion when (motion.ButtonMask & MouseButtonMask.Right) != 0
+                                                   || ((motion.ButtonMask & MouseButtonMask.Left) != 0 && (LeftDragPans?.Invoke() ?? false)):
                 DragGround(motion.Position - motion.Relative, motion.Position);
+                break;
+
+            case InputEventKey { Pressed: true, Keycode: Key.Equal or Key.Plus or Key.KpAdd }:
+                ZoomAt(GetViewport().GetVisibleRect().Size / 2, 1f / ZoomStep);
+                break;
+
+            case InputEventKey { Pressed: true, Keycode: Key.Minus or Key.KpSubtract }:
+                ZoomAt(GetViewport().GetVisibleRect().Size / 2, ZoomStep);
                 break;
 
             case InputEventMouseMotion motion when (motion.ButtonMask & MouseButtonMask.Middle) != 0:

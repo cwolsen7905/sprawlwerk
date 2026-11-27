@@ -14,7 +14,9 @@ namespace SprawlWerk;
 /// The map is rebuilt only when <see cref="CityController.MapVersion"/> moves,
 /// never every frame. The pointer is turned into a tile by casting a ray from the
 /// camera to the ground; the hovered tile and the drag preview are drawn as
-/// translucent tiles (white, or red when the simulation would refuse).
+/// translucent tiles (white, or red when the simulation would refuse). With
+/// the query tool a click (not a drag, which pans) picks the tile to inspect,
+/// and that tile stays marked.
 /// Shown unless the 2D debug view is on (F3).
 /// </summary>
 public partial class CityWorld : Node3D
@@ -38,6 +40,7 @@ public partial class CityWorld : Node3D
     private Vector2I _groundSize;
     private Rect2I? _previewArea;
     private bool _previewRefused;
+    private Vector2? _pressedAt;
 
     /// <summary>A model file's meshes, with each one's transform inside the model and the model's bounds.</summary>
     private sealed record Model(List<(Mesh Mesh, Transform3D Local)> Parts, Aabb Bounds);
@@ -45,7 +48,7 @@ public partial class CityWorld : Node3D
     public override void _Ready()
     {
         _city = GetNode<CityController>("../City");
-        _rig = new CameraRig { PointerOverUi = _city.PointerOverUi };
+        _rig = new CameraRig { PointerOverUi = _city.PointerOverUi, LeftDragPans = () => _city.Tool is null };
         AddChild(_rig);
         _scenery = new Node3D { Name = "Scenery" };
         AddChild(_scenery);
@@ -94,10 +97,17 @@ public partial class CityWorld : Node3D
 
         if (mb.Pressed)
         {
-            if (!_city.PointerOverUi()) _city.BeginDrag();
+            _pressedAt = null;
+            if (_city.PointerOverUi()) return;
+            _pressedAt = mb.Position;
+            _city.BeginDrag();
         }
         else
         {
+            // The query tool: a click inspects, a drag only panned the view.
+            if (_city.Tool is null && _pressedAt is { } at && at.DistanceTo(mb.Position) < 6f)
+                _city.Inspected = TileAt(mb.Position);
+            _pressedAt = null;
             _city.FinishDrag(TileAt(mb.Position));
         }
     }
@@ -255,6 +265,7 @@ public partial class CityWorld : Node3D
     {
         var command = _city.PreviewCommand();
         var area = CityController.AreaOf(command);
+        if (_city.Tool is null && _city.Inspected is { } inspected) area = new Rect2I(inspected, Vector2I.One);
         bool refused = command is not null && !_city.Sim.Quote(command).Accepted;
         if (area == _previewArea && refused == _previewRefused) return;
         _previewArea = area;
