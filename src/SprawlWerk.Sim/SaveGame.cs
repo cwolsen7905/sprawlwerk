@@ -55,6 +55,17 @@ public static class SaveGame
 
         /// <summary>Grown buildings by tile and content type id; absent in older saves.</summary>
         public List<BuildingEntry>? Buildings { get; set; }
+
+        /// <summary>Buildings in decline: tile, bad months, abandoned. Absent in older saves (all well).</summary>
+        public List<StressEntry>? Stress { get; set; }
+    }
+
+    private sealed class StressEntry
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Months { get; set; }
+        public bool Abandoned { get; set; }
     }
 
     private sealed class BuildingEntry
@@ -93,6 +104,7 @@ public static class SaveGame
             Random = sim.Random.State,
             Demand = sim.DemandStarted ? [sim.Demand.Residential, sim.Demand.Commercial, sim.Demand.Industrial] : null,
             Buildings = BuildingsOf(sim),
+            Stress = sim.StressedBuildings().Select(s => new StressEntry { X = s.X, Y = s.Y, Months = s.Stress, Abandoned = s.Abandoned }).ToList(),
             Kinds = kinds,
             Heights = heights,
         }, Options);
@@ -169,6 +181,12 @@ public static class SaveGame
                 report.Add($"'{b.Type}' at ({b.X},{b.Y}) is not in the loaded content; the zone will grow again");
             else
                 sim.Map[b.X, b.Y].Building = handle;
+        }
+        foreach (var s in data.Stress ?? [])
+        {
+            if (!sim.Map.InBounds(s.X, s.Y)) throw new SaveFormatException($"stress at ({s.X},{s.Y}) is off the map");
+            if (s.Months < 0) throw new SaveFormatException($"stress at ({s.X},{s.Y}) is negative");
+            if (!sim.Map[s.X, s.Y].Building.IsNone) sim.RestoreStress(s.X, s.Y, s.Months, s.Abandoned);
         }
         Demand? demand = data.Demand is { Length: 3 } d ? new Demand(d[0], d[1], d[2]) : null;
         if (data.Demand is not null && demand is null) throw new SaveFormatException("demand must have three values");

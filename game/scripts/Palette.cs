@@ -27,6 +27,9 @@ public static class Palette
     /// <summary>Zones without power are drawn dim, in both views: the first piece of feedback.</summary>
     public static Color Unpowered(Color color) => color.Darkened(0.55f);
 
+    /// <summary>The lot of a building nobody lives or works in: grey, whatever its zone.</summary>
+    public static readonly Color Abandoned = new("8a8a84");
+
     public static Color For(TileKind kind) => kind switch
     {
         TileKind.Residential => new Color("009e73"), // bluish green

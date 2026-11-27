@@ -66,6 +66,9 @@ To skip the title menu while developing: `godot --path game -- --new-city`
   demand: houses, shops and factories, drawn as low-poly models. Jobs pull
   residents, residents pull shops, workers pull industry; the top bar shows
   residents, jobs and demand, and the status bar says why a zone is not growing
+- Buildings without power or a road, or in a zone whose demand has collapsed,
+  struggle: after three bad months they are abandoned (grey, no residents or
+  jobs), after nine they are cleared; good months bring them back
 - Building types are data: `game/content/base` holds each type's numbers
   (`*.sim.json`) and models (`*.art.json`); change a number there and restart
 - Command queue applied on fixed simulation ticks

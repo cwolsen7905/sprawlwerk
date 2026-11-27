@@ -104,7 +104,7 @@ public partial class CityView : Node2D
             var mid = (c[0] + c[2]) / 2;
             var inner = new Vector2[c.Length];
             for (int i = 0; i < c.Length; i++) inner[i] = mid + (c[i] - mid) * 0.55f;
-            DrawColoredPolygon(inner, color.Darkened(0.45f));
+            DrawColoredPolygon(inner, _city.Sim.IsAbandoned(x, y) ? Palette.Abandoned : color.Darkened(0.45f));
         }
     }
 

@@ -114,7 +114,7 @@ public sealed partial class Simulation
             for (int x = 0; x < Map.Width; x++)
             {
                 var handle = Map[x, y].Building;
-                if (handle.IsNone) continue;
+                if (handle.IsNone || IsAbandoned(x, y)) continue;
                 var type = content[handle];
                 residents += type.Residents;
                 if (type.Zone == ZoneKind.Commercial) commercial += type.Jobs;
@@ -168,7 +168,14 @@ public sealed partial class Simulation
             MapRevision++;
         }
 
-        if (CityDate.IsMonthStart(Tick)) UpdateDemand();
+        if (CityDate.IsMonthStart(Tick))
+        {
+            var (cleared, changed) = DeclinePass();
+            if (cleared) _networksDirty = true; // cleared buildings use less power
+            if (changed) MapRevision++;
+            Recount();
+            UpdateDemand();
+        }
 
         if (Tick % Growth.GrowthEvery == Growth.GrowthOffset && GrowthPass())
         {
