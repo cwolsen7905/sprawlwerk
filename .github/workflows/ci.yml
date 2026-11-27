@@ -23,5 +23,8 @@ jobs:
       - name: Simulation has no Godot reference
         run: tools/check-sim-no-godot.sh
 
+      - name: Every asset is listed with an allowed licence
+        run: tools/check-assets.sh
+
       - name: Test
         run: dotnet test tests/SprawlWerk.Sim.Tests/SprawlWerk.Sim.Tests.csproj --no-restore --logger "console;verbosity=normal"
