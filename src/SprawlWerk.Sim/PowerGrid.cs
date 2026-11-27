@@ -92,8 +92,10 @@ public sealed class PowerGrid
     }
 
     /// <summary>Rebuild from the map alone; earlier results play no part.</summary>
+    /// <param name="content">Types of the buildings on zone tiles; a tile with a building uses its type's
+    /// <c>powerUse</c> instead of the zone's. Without it, buildings are ignored.</param>
     /// <returns>The number of powered tiles.</returns>
-    public int Recompute(CityMap map)
+    public int Recompute(CityMap map, ContentSet? content = null)
     {
         if (map.Width != Width || map.Height != Height)
             throw new ArgumentException($"map is {map.Width}x{map.Height}, grid is {Width}x{Height}", nameof(map));
@@ -169,7 +171,10 @@ public sealed class PowerGrid
         long demand = 0;
         foreach (var (network, _, index) in zones)
         {
-            int use = Rules.DemandFor(map[index % Width, index / Width].Kind);
+            var tile = map[index % Width, index / Width];
+            int use = content is not null && !tile.Building.IsNone
+                ? content[tile.Building].PowerUse
+                : Rules.DemandFor(tile.Kind);
             demand += use;
             if (remaining[network] < use) continue;
             remaining[network] -= use;

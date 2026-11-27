@@ -49,6 +49,19 @@ public static class SaveGame
 
         /// <summary>The city's random generator state; absent in older saves, which start from the default seed.</summary>
         public ulong? Random { get; set; }
+
+        /// <summary>Smoothed demand for R, C and I; absent in older saves, which recompute it at the next month.</summary>
+        public int[]? Demand { get; set; }
+
+        /// <summary>Grown buildings by tile and content type id; absent in older saves.</summary>
+        public List<BuildingEntry>? Buildings { get; set; }
+    }
+
+    private sealed class BuildingEntry
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public string Type { get; set; } = "";
     }
 
     private static char CharFor(TileKind kind) => KindChars[(int)kind];
@@ -78,9 +91,22 @@ public static class SaveGame
             Tick = sim.Tick,
             Funds = sim.Funds,
             Random = sim.Random.State,
+            Demand = sim.DemandStarted ? [sim.Demand.Residential, sim.Demand.Commercial, sim.Demand.Industrial] : null,
+            Buildings = BuildingsOf(sim),
             Kinds = kinds,
             Heights = heights,
         }, Options);
+    }
+
+    private static List<BuildingEntry> BuildingsOf(Simulation sim)
+    {
+        var list = new List<BuildingEntry>();
+        if (sim.Content is not { } content) return list;
+        for (int y = 0; y < sim.Map.Height; y++)
+        for (int x = 0; x < sim.Map.Width; x++)
+            if (!sim.Map[x, y].Building.IsNone)
+                list.Add(new BuildingEntry { X = x, Y = y, Type = content[sim.Map[x, y].Building].Id });
+        return list;
     }
 
     /// <summary>What a save says about itself, read without building the city.</summary>
@@ -133,7 +159,21 @@ public static class SaveGame
             }
         }
 
-        sim.Restore(data.Tick, data.Random ?? CityRandom.DefaultSeed);
+        var report = new List<string>();
+        foreach (var b in data.Buildings ?? [])
+        {
+            if (!sim.Map.InBounds(b.X, b.Y)) throw new SaveFormatException($"building at ({b.X},{b.Y}) is off the map");
+            if (!sim.Map[b.X, b.Y].IsZone) throw new SaveFormatException($"building at ({b.X},{b.Y}) is not on a zone");
+            // A type whose pack is not loaded: the zone stays and will grow again.
+            if (content is null || !content.TryFind(b.Type, out var handle))
+                report.Add($"'{b.Type}' at ({b.X},{b.Y}) is not in the loaded content; the zone will grow again");
+            else
+                sim.Map[b.X, b.Y].Building = handle;
+        }
+        Demand? demand = data.Demand is { Length: 3 } d ? new Demand(d[0], d[1], d[2]) : null;
+        if (data.Demand is not null && demand is null) throw new SaveFormatException("demand must have three values");
+        sim.Restore(data.Tick, data.Random ?? CityRandom.DefaultSeed, demand);
+        sim.LoadReport = report;
         return sim;
     }
 
