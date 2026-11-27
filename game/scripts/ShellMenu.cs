@@ -39,6 +39,7 @@ public partial class ShellMenu : CanvasLayer
 
     public override void _Ready()
     {
+        FitWindowToScreen();
         _city = GetNode<CityController>("../City");
         _title = BuildPanel(Strings.GameTitle,
             (Strings.MenuContinue, ContinueNow),
@@ -145,6 +146,24 @@ public partial class ShellMenu : CanvasLayer
     private void Resume() => ShowPanel(null);
 
     private void Quit() => GetTree().Quit();
+
+    // The window opens at 1920×1080, where the HUD's logical size (1536×864 at
+    // scale 1.25) is what it was designed at. On a screen too small for that,
+    // shrink it to the largest 16:9 size that fits and centre it.
+    private void FitWindowToScreen()
+    {
+        var window = GetWindow();
+        if (window.Mode != Window.ModeEnum.Windowed) return;
+        int screen = window.CurrentScreen;
+        var usable = DisplayServer.ScreenGetUsableRect(screen);
+        if (usable.Size.X <= 0 || usable.Size.Y <= 0) return; // headless
+        var size = window.Size;
+        var room = (Vector2)usable.Size * 0.92f;
+        if (size.X <= room.X && size.Y <= room.Y) return;
+        float fit = Mathf.Min(room.X / size.X, room.Y / size.Y);
+        window.Size = new Vector2I((int)(size.X * fit), (int)(size.Y * fit));
+        window.Position = usable.Position + (usable.Size - window.Size) / 2;
+    }
 
     // Only one panel at a time; none means the game is running.
     private void ShowPanel(Control? panel)
