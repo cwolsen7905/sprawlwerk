@@ -250,6 +250,9 @@ public static partial class ContentLoader
                 break;
             case TypeRole.Building:
                 if (network is not null) f.Error("network", "is only for networks");
+                // A building with a zone grows there by itself and is privately owned.
+                if (zone is not null && cost is > 0) f.Error("cost", "must be 0 for a building that grows on a zone; the city does not pay for it");
+                if (zone is not null && upkeep is > 0) f.Error("upkeep", "must be 0 for a building that grows on a zone");
                 break;
         }
 

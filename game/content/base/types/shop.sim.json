@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "shop",
+  "role": "building",
+  "zone": "commercial",
+  "density": "low",
+  "size": [1, 1],
+  "cost": 0,
+  "jobs": 6,
+  "powerUse": 2
+}
