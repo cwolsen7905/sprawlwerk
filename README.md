@@ -14,6 +14,7 @@ A [BrainChurts](https://www.brainchurts.com) project.
 src/SprawlWerk.Sim/          the city simulation: plain C#, no engine dependency
 tests/SprawlWerk.Sim.Tests/  xUnit tests for the simulation
 game/                        Godot 4.7 (.NET) project: rendering, input, UI
+game/content/base/           the base content pack: building types as JSON data
 SprawlWerk.sln               solution tying the three together
 ```
 

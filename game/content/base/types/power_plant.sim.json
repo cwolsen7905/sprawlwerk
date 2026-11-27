@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "power_plant",
+  "role": "building",
+  "cost": 4000,
+  "powerSupply": 40
+}
