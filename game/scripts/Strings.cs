@@ -8,7 +8,7 @@ namespace SprawlWerk;
 /// </summary>
 public static class Strings
 {
-    public const string KeyHelp = "WASD/arrows or right-drag pan   wheel zoom   Space pause   - / = speed   F5 save   F9 load   Esc menu";
+    public const string KeyHelp = "WASD/arrows or right-drag pan   wheel zoom   Q/E or middle-drag rotate   Space pause   - / = speed   F5 save   F9 load   F3 2D view   Esc menu";
     public const string GameTitle = "SprawlWerk";
     public const string MenuNew = "New city";
     public const string MenuResume = "Resume";

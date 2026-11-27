@@ -5,17 +5,17 @@ using SprawlWerk.Sim;
 namespace SprawlWerk;
 
 /// <summary>
-/// The minimal game shell over the debug view: a title menu (Continue when a save exists,
+/// The minimal game shell over the city: a title menu (Continue when a save exists,
 /// New city, Load, Quit) and a pause overlay (Resume, Save, Quit); Load and Save open the
 /// <see cref="SaveBrowser"/>. Escape cancels a drag first; otherwise
-/// it opens or closes the pause overlay. While a menu is up the city view
+/// it opens or closes the pause overlay. While a menu is up the city
 /// is inactive, so no time passes and clicks do not reach the map.
 /// The pause overlay also holds the volume sliders (<see cref="AudioDirector"/>).
 /// Built in code so the scene stays small; a settings screen comes later.
 /// </summary>
 public partial class ShellMenu : CanvasLayer
 {
-    private CityView _city = null!;
+    private CityController _city = null!;
     private Control _title = null!;
     private Control _pause = null!;
     private SaveBrowser _browser = null!;
@@ -35,7 +35,7 @@ public partial class ShellMenu : CanvasLayer
 
     public override void _Ready()
     {
-        _city = GetNode<CityView>("../CityView");
+        _city = GetNode<CityController>("../City");
         _title = BuildPanel(Strings.GameTitle,
             (Strings.MenuContinue, ContinueNow),
             (Strings.MenuNew, StartNew),
@@ -62,8 +62,11 @@ public partial class ShellMenu : CanvasLayer
         _returnTo = _title;
         ShowPanel(_title);
 
-        // Developer shortcut: `godot --path game -- --new-city` skips the title menu.
-        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--new-city") >= 0) StartNew();
+        // Developer shortcuts: `godot --path game -- --new-city` skips the title menu;
+        // `-- --demo-city` skips it into the demo town (handy for screenshots).
+        var args = OS.GetCmdlineUserArgs();
+        if (System.Array.IndexOf(args, "--demo-city") >= 0) StartDemo();
+        else if (System.Array.IndexOf(args, "--new-city") >= 0) StartNew();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -116,6 +119,13 @@ public partial class ShellMenu : CanvasLayer
     private void StartNew()
     {
         _city.NewCity();
+        _playing = true;
+        ShowPanel(null);
+    }
+
+    private void StartDemo()
+    {
+        _city.DemoCity();
         _playing = true;
         ShowPanel(null);
     }

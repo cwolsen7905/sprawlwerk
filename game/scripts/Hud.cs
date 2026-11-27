@@ -9,7 +9,7 @@ namespace SprawlWerk;
 /// button per tool with its colour, price and key), a top bar (funds, date,
 /// power, pause and speed, Menu) and a status line at the bottom (the tile
 /// under the cursor, the cost of what the tool would do, notices and
-/// refusals). It reads <see cref="CityView"/> every frame and changes only
+/// refusals). It reads <see cref="CityController"/> every frame and changes only
 /// its tool, pause and speed; building still goes through commands. Hidden on
 /// the title menu.
 /// </summary>
@@ -31,7 +31,7 @@ public partial class Hud : CanvasLayer
     private static readonly Color Good = new("8fd18a");
     private static readonly Color Dim = new(1, 1, 1, 0.6f);
 
-    private CityView _city = null!;
+    private CityController _city = null!;
     private ShellMenu _shell = null!;
     private readonly List<Control> _panels = new();
     private readonly Dictionary<TileKind, Button> _toolButtons = new();
@@ -46,7 +46,7 @@ public partial class Hud : CanvasLayer
 
     public override void _Ready()
     {
-        _city = GetNode<CityView>("../CityView");
+        _city = GetNode<CityController>("../City");
         _shell = GetNode<ShellMenu>("../Shell");
         _city.IsOverUi = IsOverPanel;
         BuildTopBar();
@@ -84,7 +84,7 @@ public partial class Hud : CanvasLayer
         if (_city.PreviewCommand() is { } preview)
         {
             var quote = sim.Quote(preview);
-            _quote.Text = quote.Accepted ? Strings.Cost(quote.Cost) : Strings.Here(CityView.Describe(quote));
+            _quote.Text = quote.Accepted ? Strings.Cost(quote.Cost) : Strings.Here(CityController.Describe(quote));
             _quote.Modulate = quote.Accepted ? Colors.White : new Color("f2a07b");
         }
         else
@@ -147,10 +147,10 @@ public partial class Hud : CanvasLayer
         _pauseButton = new Button { Text = Strings.PauseButton, ToggleMode = true, FocusMode = Control.FocusModeEnum.None };
         _pauseButton.Pressed += () => _city.Paused = !_city.Paused;
         speeds.AddChild(_pauseButton);
-        for (int i = 0; i < CityView.SpeedSteps.Count; i++)
+        for (int i = 0; i < CityController.SpeedSteps.Count; i++)
         {
             int index = i;
-            var button = new Button { Text = Strings.Speed(CityView.SpeedSteps[i]), ToggleMode = true, FocusMode = Control.FocusModeEnum.None };
+            var button = new Button { Text = Strings.Speed(CityController.SpeedSteps[i]), ToggleMode = true, FocusMode = Control.FocusModeEnum.None };
             button.Pressed += () => { _city.SpeedIndex = index; _city.Paused = false; };
             speeds.AddChild(button);
             _speedButtons.Add(button);

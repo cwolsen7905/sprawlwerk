@@ -1,179 +1,56 @@
-using System;
-using System.Collections.Generic;
 using Godot;
 using SprawlWerk.Sim;
 
 namespace SprawlWerk;
 
 /// <summary>
-/// First playable view: draws the simulation's map as isometric tiles and
-/// turns mouse and keyboard input into simulation commands. Deliberately
-/// simple (immediate-mode drawing, no art) so the simulation can grow
-/// before the rendering does.
+/// The 2D debug view, shown instead of the 3D world while F3 is on: the map as
+/// flat isometric diamonds (immediate-mode drawing, no art), so rules can be
+/// checked tile by tile. Everything that is not drawing (time, tools, drags,
+/// saves) is in <see cref="CityController"/>; this view only draws it and
+/// reports the tile under the pointer.
 ///
-/// Controls: 1 residential, 2 commercial, 3 industrial, 4 road,
-/// 5 power line, 6 power plant, 0 bulldoze. Left-click places one tile; drag to fill
-/// a rectangle (zones, bulldoze) or a straight line (road, power line), with the
-/// total cost shown while dragging. Escape cancels a drag (see <see cref="CancelDrag"/>).
-/// Space pauses, - and = change the speed (1x, 2x, 4x). Commands are still
-/// accepted while paused and apply when time resumes.
-/// The city autosaves once a month into one slot (see <see cref="Autosave"/>).
-/// F5 quick-saves and F9 quick-loads one slot; named saves go through the shell menu's save browser.
-/// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// Camera: WASD or the arrow keys pan, right- or middle-drag pans, the wheel zooms toward the cursor.
-/// The HUD (toolbar, top bar, status line) lives in <see cref="Hud"/> and reads this view's state.
-/// Each tick's commands make one sound: the last one's (see <see cref="AudioDirector"/>).
 /// </summary>
 public partial class CityView : Node2D
 {
-    private const int MapSize = 32;
     private const float TileW = 48f;
     private const float TileH = 24f;
-    private const double SecondsPerTick = 0.25;
-
-    private Simulation _sim = null!;
-    private TileKind _tool = TileKind.Residential;
-    private static readonly int[] Speeds = [1, 2, 4];
-
-    private double _tickAccumulator;
-    private bool _paused;
-    private int _speedIndex;
-    private Vector2I? _dragStart;
-    private Vector2I? _hover;
-    private string _lastRefusal = "";
-    private string _notice = "";
-    private Camera2D _camera = null!;
     private const float MinZoom = 0.5f;
     private const float MaxZoom = 3f;
     private const float PanSpeed = 900f; // screen pixels per second
 
-    /// <summary>False while a menu is open: no time passes and the view ignores input.</summary>
-    public bool Active { get; set; } = true;
-
-    /// <summary>The city being shown. Read-only for views; changes go through commands.</summary>
-    public Simulation Sim => _sim;
-
-    public TileKind Tool { get => _tool; set { _tool = value; _dragStart = null; } }
-
-    public bool Paused { get => _paused; set => _paused = value; }
-
-    public static IReadOnlyList<int> SpeedSteps => Speeds;
-
-    public int SpeedIndex { get => _speedIndex; set => _speedIndex = Mathf.Clamp(value, 0, Speeds.Length - 1); }
-
-    /// <summary>The tile under the cursor, unless the cursor is over the HUD.</summary>
-    public Vector2I? Hover => _hover;
-
-    public string LastRefusal => _lastRefusal;
-
-    public string Notice => _notice;
-
-    /// <summary>Set by the HUD: true when a screen point is over one of its panels.</summary>
-    public Func<Vector2, bool>? IsOverUi { get; set; }
-
-    /// <summary>Abandon a drag in progress; true if there was one.</summary>
-    public bool CancelDrag()
-    {
-        bool was = _dragStart is not null;
-        _dragStart = null;
-        return was;
-    }
-
-    private const string QuickSavePath = "user://quicksave.json";
-
-    /// <summary>The city as save text.</summary>
-    public string SaveToJson() => SaveGame.Serialize(_sim);
-
-    /// <summary>Replace the city with a saved one.</summary>
-    /// <exception cref="SaveFormatException">The save is damaged or from a newer game; the current city is kept.</exception>
-    public void LoadFromJson(string json)
-    {
-        _sim = SaveGame.Deserialize(json);
-        _tickAccumulator = 0;
-        _dragStart = null;
-        _lastRefusal = "";
-        _notice = Strings.Loaded;
-        CenterCamera();
-    }
-
-    // Once a month, into the single autosave slot; a failure is shown and the game carries on.
-    private void AutosaveNow()
-    {
-        if (SaveStore.Write(Autosave.FileName, SaveToJson()) is { } problem)
-            _lastRefusal = Strings.AutosaveFailed(problem);
-        else
-            _notice = Strings.Autosaved;
-    }
-
-    private void QuickSave()
-    {
-        if (SaveStore.WriteAtomic(QuickSavePath, SaveToJson()) is { } problem) { _lastRefusal = problem; return; }
-        _lastRefusal = "";
-        _notice = Strings.Saved;
-        AudioDirector.Instance?.Play(Sfx.Confirm);
-    }
-
-    private void QuickLoad()
-    {
-        if (!Godot.FileAccess.FileExists(QuickSavePath)) { _lastRefusal = Strings.NoSave; return; }
-        try
-        {
-            LoadFromJson(Godot.FileAccess.GetFileAsString(QuickSavePath));
-        }
-        catch (SaveFormatException e)
-        {
-            _lastRefusal = Strings.LoadFailed(e.Message);
-        }
-    }
-
-    /// <summary>Start over with an empty city.</summary>
-    public void NewCity()
-    {
-        _sim = new Simulation(MapSize, MapSize);
-        _sim.Step();
-        _tickAccumulator = 0;
-        _paused = false;
-        _dragStart = null;
-        _lastRefusal = "";
-        CenterCamera();
-    }
+    private CityController _city = null!;
+    private Camera2D _camera = null!;
 
     public override void _Ready()
     {
-        _sim = new Simulation(MapSize, MapSize);
-        SeedDemoCity();
-        _sim.Step();
+        _city = GetNode<CityController>("../City");
         _camera = new Camera2D();
         AddChild(_camera);
-        _camera.MakeCurrent();
+        _city.CityReplaced += CenterCamera;
+        Visible = false;
         CenterCamera();
     }
 
     public override void _Process(double delta)
     {
-        // Fixed-rate simulation ticks, independent of frame rate.
-        // Speed only changes how fast time is fed in; each tick is the same.
-        if (Active && !_paused) _tickAccumulator += delta * Speeds[_speedIndex];
-        while (_tickAccumulator >= SecondsPerTick)
+        bool shown = _city.DebugView;
+        if (Visible != shown)
         {
-            long before = _sim.Tick;
-            _sim.Step();
-            _tickAccumulator -= SecondsPerTick;
-            if (Autosave.IsDue(before, _sim.Tick)) AutosaveNow();
-            NoteRefusals();
+            Visible = shown;
+            if (shown) _camera.MakeCurrent();
         }
+        if (!shown) return;
 
-        if (Active) PanWithKeys(delta);
-
-        bool overUi = IsOverUi?.Invoke(GetViewport().GetMousePosition()) ?? false;
-        _hover = overUi ? null : ScreenToTile(GetLocalMousePosition());
-
+        if (_city.Active) PanWithKeys(delta);
+        _city.Hover = _city.Active && !_city.PointerOverUi() ? ScreenToTile(GetLocalMousePosition()) : null;
         QueueRedraw();
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (!Active) return;
+        if (!_city.DebugView || !_city.Active) return;
         switch (@event)
         {
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
@@ -189,41 +66,16 @@ public partial class CityView : Node2D
                 break;
 
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
-                if (mb.Pressed)
-                    _dragStart = _hover;
-                else if (_dragStart is { } start)
-                {
-                    // Released off the map: use the last tile the cursor was over.
-                    if ((ScreenToTile(GetLocalMousePosition()) ?? _hover) is { } end) Place(start, end);
-                    _dragStart = null;
-                }
-                break;
-
-            case InputEventKey { Pressed: true, Echo: false } key:
-                if (key.Keycode == Key.F5) QuickSave();
-                else if (key.Keycode == Key.F9) QuickLoad();
-                else if (key.Keycode == Key.Space) _paused = !_paused;
-                else if (key.Keycode == Key.Minus) _speedIndex = Mathf.Max(0, _speedIndex - 1);
-                else if (key.Keycode == Key.Equal) _speedIndex = Mathf.Min(Speeds.Length - 1, _speedIndex + 1);
-
-                _tool = key.Keycode switch
-                {
-                    Key.Key1 => TileKind.Residential,
-                    Key.Key2 => TileKind.Commercial,
-                    Key.Key3 => TileKind.Industrial,
-                    Key.Key4 => TileKind.Road,
-                    Key.Key5 => TileKind.PowerLine,
-                    Key.Key6 => TileKind.PowerPlant,
-                    Key.Key0 => TileKind.Empty,
-                    _ => _tool,
-                };
+                if (mb.Pressed) _city.BeginDrag();
+                else _city.FinishDrag(ScreenToTile(GetLocalMousePosition()));
                 break;
         }
     }
 
     public override void _Draw()
     {
-        var map = _sim.Map;
+        var map = _city.Sim.Map;
+        DrawRect(new Rect2(_camera.Position - GetViewportRect().Size / _camera.Zoom, GetViewportRect().Size * 2 / _camera.Zoom), Palette.Ground.Darkened(0.4f));
 
         // Back-to-front: increasing x + y draws far tiles first.
         for (int sum = 0; sum <= map.Width + map.Height - 2; sum++)
@@ -234,86 +86,26 @@ public partial class CityView : Node2D
             DrawTile(x, y, map[x, y]);
         }
 
-        var preview = PreviewCommand();
-        if (preview is PlaceCommand pc) DrawArea(pc.X, pc.Y, pc.Width, pc.Height);
-        else if (preview is BulldozeCommand bc) DrawArea(bc.X, bc.Y, bc.Width, bc.Height);
+        if (CityController.AreaOf(_city.PreviewCommand()) is { } area) DrawArea(area);
     }
-
-    // Re-sent areas that are already built are not worth showing; only real problems are.
-    private void NoteRefusals()
-    {
-        Sfx? sound = null;
-        foreach (var outcome in _sim.LastOutcomes)
-        {
-            if (outcome.Result.Refusal is Refusal.NothingToChange) continue;
-            sound = SoundFor(outcome);
-            if (outcome.Result.Accepted) continue;
-            _lastRefusal = Strings.Refused(Describe(outcome.Result));
-        }
-        if (sound is { } s) AudioDirector.Instance?.Play(s);
-    }
-
-    private static Sfx SoundFor(CommandOutcome outcome) => outcome switch
-    {
-        { Result.Accepted: false } => Sfx.Refused,
-        { Command: BulldozeCommand } => Sfx.Bulldoze,
-        { Command: PlaceCommand { Kind: TileKind.Empty } } => Sfx.Bulldoze,
-        { Command: PlaceCommand { Kind: TileKind.PowerPlant } } => Sfx.PlaceBuilding,
-        _ => Sfx.Place,
-    };
-
-    public static string Describe(CommandResult r) => r.Refusal switch
-    {
-        Refusal.InsufficientFunds => Strings.NeedsFunds(r.Cost),
-        Refusal.NothingToChange => Strings.AlreadyBuilt,
-        Refusal.OutOfBounds => Strings.OffTheMap,
-        _ => r.Refusal.ToString(),
-    };
 
     private void DrawTile(int x, int y, Tile tile)
     {
         var color = Palette.For(tile.Kind);
-
-        // Zones without power are drawn dim: the first piece of feedback.
-        if (tile.IsZone && !_sim.Power.IsPowered(x, y)) color = color.Darkened(0.55f);
+        if (tile.IsZone && !_city.Sim.Power.IsPowered(x, y)) color = Palette.Unpowered(color);
 
         DrawColoredPolygon(Diamond(x, y), color);
         DrawPolyline(Diamond(x, y, close: true), new Color(0, 0, 0, 0.25f), 1f);
     }
 
-    private void Place(Vector2I from, Vector2I to)
+    private void DrawArea(Rect2I area)
     {
-        _lastRefusal = "";
-        _notice = "";
-        _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
-    }
-
-    /// <summary>What the tool would do now: the whole drag if one is under way, else the hovered tile.</summary>
-    public ICommand? PreviewCommand()
-    {
-        if (_hover is not { } h) return null;
-        var from = _dragStart ?? h;
-        return Drag.Command(_tool, from.X, from.Y, h.X, h.Y);
-    }
-
-    private void DrawArea(int x, int y, int w, int h)
-    {
-        for (int ty = y; ty < y + h; ty++)
-        for (int tx = x; tx < x + w; tx++)
+        for (int ty = area.Position.Y; ty < area.End.Y; ty++)
+        for (int tx = area.Position.X; tx < area.End.X; tx++)
         {
-            if (!_sim.Map.InBounds(tx, ty)) continue;
+            if (!_city.Sim.Map.InBounds(tx, ty)) continue;
             DrawPolyline(Diamond(tx, ty, close: true), Colors.White, 1.5f);
         }
-    }
-
-    private void SeedDemoCity()
-    {
-        _sim.Enqueue(new PlaceCommand(4, 4, TileKind.PowerPlant));
-        _sim.Enqueue(new PlaceCommand(5, 4, 6, 1, TileKind.PowerLine));
-        _sim.Enqueue(new PlaceCommand(11, 2, 4, 5, TileKind.Residential));
-        _sim.Enqueue(new PlaceCommand(15, 0, 1, MapSize, TileKind.Road));
-        _sim.Enqueue(new PlaceCommand(16, 2, 4, 4, TileKind.Commercial));
-        _sim.Enqueue(new PlaceCommand(22, 10, 5, 4, TileKind.Industrial)); // unpowered on purpose
     }
 
     // --- isometric helpers ---
@@ -340,7 +132,7 @@ public partial class CityView : Node2D
         float b = local.Y / (TileH / 2f);
         int x = Mathf.FloorToInt((b + a) / 2f);
         int y = Mathf.FloorToInt((b - a) / 2f);
-        return _sim.Map.InBounds(x, y) ? new Vector2I(x, y) : null;
+        return _city.Sim.Map.InBounds(x, y) ? new Vector2I(x, y) : null;
     }
 
     // --- camera ---
@@ -349,7 +141,7 @@ public partial class CityView : Node2D
     {
         if (_camera is null) return;
         _camera.Zoom = Vector2.One;
-        _camera.Position = new Vector2(0, _sim.Map.Height * TileH / 2f);
+        _camera.Position = new Vector2(0, _city.Sim.Map.Height * TileH / 2f);
     }
 
     private void PanWithKeys(double delta)
@@ -365,7 +157,7 @@ public partial class CityView : Node2D
     // Keep the map's middle reachable: the camera may not wander past its edges.
     private void MoveCamera(Vector2 by)
     {
-        var map = _sim.Map;
+        var map = _city.Sim.Map;
         float halfW = (map.Width + map.Height) * TileW / 4f;
         var p = _camera.Position + by;
         _camera.Position = new Vector2(

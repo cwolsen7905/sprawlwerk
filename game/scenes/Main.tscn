@@ -1,16 +1,24 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://scripts/CityView.cs" id="1_cityview"]
-[ext_resource type="Script" path="res://scripts/ShellMenu.cs" id="2_shell"]
-[ext_resource type="Script" path="res://scripts/Hud.cs" id="3_hud"]
+[ext_resource type="Script" path="res://scripts/CityController.cs" id="1_city"]
+[ext_resource type="Script" path="res://scripts/CityWorld.cs" id="2_world"]
+[ext_resource type="Script" path="res://scripts/CityView.cs" id="3_cityview"]
+[ext_resource type="Script" path="res://scripts/Hud.cs" id="4_hud"]
+[ext_resource type="Script" path="res://scripts/ShellMenu.cs" id="5_shell"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node"]
+
+[node name="City" type="Node" parent="."]
+script = ExtResource("1_city")
+
+[node name="World" type="Node3D" parent="."]
+script = ExtResource("2_world")
 
 [node name="CityView" type="Node2D" parent="."]
-script = ExtResource("1_cityview")
+script = ExtResource("3_cityview")
 
 [node name="Hud" type="CanvasLayer" parent="."]
-script = ExtResource("3_hud")
+script = ExtResource("4_hud")
 
 [node name="Shell" type="CanvasLayer" parent="."]
-script = ExtResource("2_shell")
+script = ExtResource("5_shell")

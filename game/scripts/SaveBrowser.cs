@@ -20,7 +20,7 @@ public partial class SaveBrowser : Control
     private static readonly Color ErrorColor = new("e86f5c");
     private static readonly Color OkColor = new("8fd18a");
 
-    private readonly CityView _city;
+    private readonly CityController _city;
     private readonly List<SaveEntry> _entries = new();
     private BrowserMode _mode;
     private Label _heading = null!;
@@ -40,7 +40,7 @@ public partial class SaveBrowser : Control
     /// <summary>A save was loaded into the city.</summary>
     public event Action? Loaded;
 
-    public SaveBrowser(CityView city) => _city = city;
+    public SaveBrowser(CityController city) => _city = city;
 
     public bool Confirming => _confirm.Visible;
 
