@@ -40,12 +40,21 @@ dotnet test
 
 **The game:** open `game/project.godot` in Godot (.NET) and press Play (F5).
 
-Current controls: `1` residential, `2` commercial, `3` industrial, `4` road,
-`5` power line, `6` power plant, `0` bulldoze. Click to place one tile; drag to fill a rectangle (zones, bulldoze) or a
-straight line (road, power line); the cost shows while you drag, and Escape
-cancels.
-Zones without power are drawn dim. `Escape` opens the pause menu; `F5` saves and `F9` loads one quick slot (named saves: Save on the pause menu, Load on the title menu); `Space` pauses; `-` and `=` set the
-speed (1x, 2x, 4x).
+Pick a tool from the Build toolbar on the left, or press `1` residential,
+`2` commercial, `3` industrial, `4` road, `5` power line, `6` power plant,
+`0` bulldoze. Click to place one tile; drag to fill a rectangle (zones,
+bulldoze) or a straight line (road, power line); the cost shows in the status
+bar while you drag, and Escape cancels. The status bar also names the tile
+under the cursor and whether it has power; zones without power are drawn dim.
+
+Move the camera with `WASD` or the arrow keys, or drag with the right or
+middle mouse button; the wheel zooms toward the cursor. The top bar shows
+funds, date and power demand against supply, with pause and speed buttons
+(also `Space`, `-` and `=`) and a Menu button (also `Escape`) for the pause
+menu, which holds Save and the volume sliders. `F5` saves and `F9` loads one
+quick slot; Load is on the title menu.
+
+To skip the title menu while developing: `godot --path game -- --new-city`.
 
 ## What works today
 
@@ -57,7 +66,8 @@ speed (1x, 2x, 4x).
 - A minimal title menu and pause menu
 - Versioned JSON saves, written atomically; monthly autosave and Continue on the title menu; a loaded city continues exactly as the saved one would
 - A calendar derived from ticks, pause and three speeds
-- Isometric debug view in Godot with tile picking
+- Isometric debug view in Godot with tile picking, a build toolbar, top and
+  status bars, and a camera that pans and zooms
 - Music, city ambience and sound effects, with volume sliders on the pause menu
 
 ## Contributing

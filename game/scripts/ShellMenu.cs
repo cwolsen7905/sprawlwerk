@@ -24,6 +24,15 @@ public partial class ShellMenu : CanvasLayer
     private Label _titleStatus = null!;
     private bool _playing;
 
+    /// <summary>True once a city is in play (after New, Load or Continue), including while paused.</summary>
+    public bool Playing => _playing;
+
+    /// <summary>Open the pause overlay, as Escape does; the HUD's Menu button uses it.</summary>
+    public void OpenPause()
+    {
+        if (_playing && !_browser.Visible) ShowPanel(_pause);
+    }
+
     public override void _Ready()
     {
         _city = GetNode<CityView>("../CityView");
@@ -52,6 +61,9 @@ public partial class ShellMenu : CanvasLayer
         AddChild(_browser);
         _returnTo = _title;
         ShowPanel(_title);
+
+        // Developer shortcut: `godot --path game -- --new-city` skips the title menu.
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--new-city") >= 0) StartNew();
     }
 
     public override void _UnhandledInput(InputEvent @event)
