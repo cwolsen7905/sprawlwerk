@@ -1,3 +1,5 @@
+using SprawlWerk.Sim.Content;
+
 namespace SprawlWerk.Sim;
 
 /// <summary>Placeholder numbers for the power rules, until plants become data-defined types.</summary>
@@ -6,6 +8,22 @@ namespace SprawlWerk.Sim;
 public sealed record PowerRules(int PlantCapacity = 40, int DemandPerZone = 1)
 {
     public static PowerRules Default { get; } = new();
+
+    /// <summary>Use per zone kind, overriding <see cref="DemandPerZone"/>; null means every zone uses that.</summary>
+    public IReadOnlyDictionary<TileKind, int>? ZoneDemand { get; init; }
+
+    /// <summary>Units one tile of this zone kind uses.</summary>
+    public int DemandFor(TileKind kind) =>
+        ZoneDemand is not null && ZoneDemand.TryGetValue(kind, out int use) ? use : DemandPerZone;
+
+    /// <summary>Plant output from the power plant type's <c>powerSupply</c>; each zone's use from its <c>powerUse</c>.</summary>
+    public static PowerRules FromContent(ContentSet content)
+    {
+        var zones = new Dictionary<TileKind, int>();
+        foreach (var kind in new[] { TileKind.Residential, TileKind.Commercial, TileKind.Industrial })
+            zones[kind] = KindIds.TypeFor(content, kind).PowerUse;
+        return new PowerRules(KindIds.TypeFor(content, TileKind.PowerPlant).PowerSupply) { ZoneDemand = zones };
+    }
 }
 
 /// <summary>
@@ -47,7 +65,7 @@ public sealed class PowerGrid
     public long Supply { get; private set; }
 
     /// <summary>Total demand of every connected zoned tile.</summary>
-    public long Demand => (long)ConnectedZones * Rules.DemandPerZone;
+    public long Demand { get; private set; }
 
     public PowerGrid(int width, int height, PowerRules? rules = null)
     {
@@ -58,6 +76,9 @@ public sealed class PowerGrid
         Rules = rules ?? PowerRules.Default;
         ArgumentOutOfRangeException.ThrowIfNegative(Rules.PlantCapacity);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(Rules.DemandPerZone);
+        ArgumentOutOfRangeException.ThrowIfNegative(Rules.PlantCapacity);
+        if (Rules.ZoneDemand is not null)
+            foreach (var use in Rules.ZoneDemand.Values) ArgumentOutOfRangeException.ThrowIfNegative(use);
         _powered = new bool[width * height];
         _component = new int[width * height];
         _distance = new int[width * height];
@@ -145,13 +166,17 @@ public sealed class PowerGrid
             remaining[id] = (long)plantsPerNetwork[id] * Rules.PlantCapacity;
 
         int poweredZones = 0;
+        long demand = 0;
         foreach (var (network, _, index) in zones)
         {
-            if (remaining[network] < Rules.DemandPerZone) continue;
-            remaining[network] -= Rules.DemandPerZone;
+            int use = Rules.DemandFor(map[index % Width, index / Width].Kind);
+            demand += use;
+            if (remaining[network] < use) continue;
+            remaining[network] -= use;
             _powered[index] = true;
             poweredZones++;
         }
+        Demand = demand;
 
         ConnectedZones = zones.Count;
         PoweredZones = poweredZones;
