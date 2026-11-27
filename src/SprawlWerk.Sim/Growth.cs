@@ -71,7 +71,8 @@ public sealed partial class Simulation
     /// <summary>
     /// Jobs pull residents, residents pull shops, workers pull industry; an
     /// empty city wants some residents and some industry to start (G-1).
-    /// Taxes join the formula with the budget.
+    /// Each zone's tax rate above neutral then takes <see cref="GrowthRules.TaxWeight"/>
+    /// a point off its demand (below neutral, adds it).
     /// </summary>
     private void UpdateDemand()
     {
@@ -81,10 +82,13 @@ public sealed partial class Simulation
         long targetC = (long)Residents * g.CommercialPer100 / 100;
         long targetI = workers * g.IndustrialShare / 100 + g.ExportJobs;
 
-        int Raw(long target, long actual) =>
-            (int)Math.Clamp((target - actual) * 1000 / Math.Max(target, g.MinScale), -1000, 1000);
+        int Raw(long target, long actual, ZoneKind zone) => (int)Math.Clamp(
+            Math.Clamp((target - actual) * 1000 / Math.Max(target, g.MinScale), -1000, 1000) - TaxPull(zone), -1000, 1000);
 
-        var raw = new Demand(Raw(targetR, Residents), Raw(targetC, CommercialJobs), Raw(targetI, IndustrialJobs));
+        var raw = new Demand(
+            Raw(targetR, Residents, ZoneKind.Residential),
+            Raw(targetC, CommercialJobs, ZoneKind.Commercial),
+            Raw(targetI, IndustrialJobs, ZoneKind.Industrial));
         if (!_demandStarted)
         {
             Demand = raw;

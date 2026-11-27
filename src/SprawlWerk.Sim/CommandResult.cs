@@ -14,6 +14,9 @@ public enum Refusal : byte
 
     /// <summary>The city cannot pay the whole cost.</summary>
     InsufficientFunds,
+
+    /// <summary>A setting outside its allowed range (a tax rate above the maximum).</summary>
+    OutOfRange,
 }
 
 /// <summary>

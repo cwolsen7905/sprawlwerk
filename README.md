@@ -55,9 +55,12 @@ date and power demand against supply, with pause and speed buttons (also
 `Space`, `-` and `=`) and a Menu button (also `Escape`) for the pause menu,
 which holds Save and the volume sliders. `F5` saves and `F9` loads one quick
 slot; Load is on the title menu. `F3` swaps to the flat 2D debug view and back.
+Next to funds, the top bar shows last month's net; its Budget button opens the
+budget panel (last month's taxes and upkeep, and `-`/`+` for each zone's tax rate).
 
 To skip the title menu while developing: `godot --path game -- --new-city`
-(an empty city) or `-- --demo-city` (a small demo town).
+(an empty city) or `-- --demo-city` (a small demo town); add `--open-budget`
+to start with the budget panel open.
 
 ## What works today
 
@@ -71,6 +74,11 @@ To skip the title menu while developing: `godot --path game -- --new-city`
   jobs), after nine they are cleared; good months bring them back
 - Building types are data: `game/content/base` holds each type's numbers
   (`*.sim.json`) and models (`*.art.json`); change a number there and restart
+- A monthly budget: residents and jobs pay tax at a rate per zone (0-20%,
+  7% to start); every road, power line and plant tile costs upkeep, so a
+  spread-out city pays more. Taxes above 7% lower a zone's demand, below raise
+  it. Funds can go into debt (no bankruptcy yet). Numbers are placeholders,
+  in the base pack's `upkeep` fields
 - Command queue applied on fixed simulation ticks
 - Power grid: flood fill from plants through lines and zones; each plant has a
   capacity, and when a network is over it the zones farthest from a plant go dark

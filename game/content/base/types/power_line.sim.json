@@ -3,5 +3,6 @@
   "id": "power_line",
   "role": "network",
   "network": "power",
-  "cost": 8
+  "cost": 8,
+  "upkeep": 1
 }

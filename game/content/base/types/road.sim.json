@@ -3,5 +3,6 @@
   "id": "road",
   "role": "network",
   "network": "road",
-  "cost": 15
+  "cost": 15,
+  "upkeep": 1
 }

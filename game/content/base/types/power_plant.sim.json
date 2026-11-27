@@ -3,5 +3,6 @@
   "id": "power_plant",
   "role": "building",
   "cost": 4000,
+  "upkeep": 100,
   "powerSupply": 40
 }
