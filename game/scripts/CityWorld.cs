@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using SprawlWerk.Sim;
+using SprawlWerk.Sim.Content;
 
 namespace SprawlWerk;
 
@@ -18,6 +19,12 @@ namespace SprawlWerk;
 /// the query tool a click (not a drag, which pans) picks the tile to inspect,
 /// and that tile stays marked.
 /// Shown unless the 2D debug view is on (F3).
+///
+/// Changes made during play move (see <see cref="WorldFx"/>): each rebuild
+/// compares what each tile drew last time with what it draws now, so new
+/// buildings rise, removed ones sink, and tiles the player lays pop in. A moving
+/// tile stays in its MultiMesh; only its few instances are rewritten each frame.
+/// A different city (new, loaded) is drawn at rest, with nothing moving.
 /// </summary>
 public partial class CityWorld : Node3D
 {
@@ -42,8 +49,22 @@ public partial class CityWorld : Node3D
     private bool _previewRefused;
     private Vector2? _pressedAt;
 
+    private WorldParticles _fx = null!;
+    private double _time;
+    private bool _fxRebuild;
+    private bool _quiet; // changes made while the 2D view was up are shown at rest
+    private TileDraw[] _drawn = [];
+    private readonly Dictionary<Vector2I, TileAnimation> _moving = new();
+    private readonly List<TileAnimation> _sinking = new();
+    private readonly Dictionary<Vector2I, (Vector3 At, float Size)> _smokeSources = new();
+    private static readonly List<(string Model, Transform3D Xf)> NoModels = new();
+
     /// <summary>A model file's meshes, with each one's transform inside the model and the model's bounds.</summary>
     private sealed record Model(List<(Mesh Mesh, Transform3D Local)> Parts, Aabb Bounds);
+
+    /// <summary>What one tile drew at the last rebuild: its kind, its building and every model, in world space.</summary>
+    private sealed record TileDraw(TileKind Kind, TypeHandle Building, (string Model, Transform3D Xf)? BuildingModel,
+        List<(string Model, Transform3D Xf)> Models, Vector3 Base);
 
     public override void _Ready()
     {
@@ -58,6 +79,8 @@ public partial class CityWorld : Node3D
         AddChild(_ground);
         _lots = NewMultiMesh(LotMesh(), LotMaterial(), useColors: true, shadows: false);
         _preview = NewMultiMesh(LotMesh(), PreviewMaterial(), useColors: true, shadows: false);
+        _fx = new WorldParticles { Name = "Effects" };
+        AddChild(_fx);
 
         foreach (var path in TileModels.All) LoadModel(path);
 
@@ -74,9 +97,12 @@ public partial class CityWorld : Node3D
             _rig.Camera.Current = shown;
         }
         _rig.Enabled = shown && _city.Active;
-        if (!shown) return;
+        if (!shown) { _quiet = true; return; }
 
-        if (_builtVersion != _city.MapVersion) Rebuild();
+        _time += delta;
+        if (_builtVersion != _city.MapVersion || _fxRebuild) Rebuild();
+        _quiet = false;
+        StepAnimations();
 
         if (_city.Active)
         {
@@ -123,42 +149,97 @@ public partial class CityWorld : Node3D
 
     private void Rebuild()
     {
+        bool mapMoved = _builtVersion != _city.MapVersion;
+        bool sameCity = ReferenceEquals(_builtVersion.City, _city.Sim);
         _builtVersion = _city.MapVersion;
+        _fxRebuild = false;
         var sim = _city.Sim;
         var map = sim.Map;
 
         BuildGround(map.Width, map.Height);
 
-        var transforms = new Dictionary<string, List<Transform3D>>();
-        var lots = new List<(Transform3D, Color)>();
+        // What every tile draws now, in world space.
+        var now = new TileDraw[map.Width * map.Height];
+        var lotColors = new Color?[now.Length];
         var placements = new List<ModelPlacement>();
+        _smokeSources.Clear();
         for (int y = 0; y < map.Height; y++)
         for (int x = 0; x < map.Width; x++)
         {
             var tile = map[x, y];
             var centre = new Vector3(x + 0.5f, 0, y + 0.5f);
+            var models = NoModels;
+            (string, Transform3D)? building = null;
             if (TileModels.IsLot(tile.Kind))
             {
                 var color = Palette.Lot(tile.Kind);
-                if (!sim.Power.IsPowered(x, y)) color = Palette.Unpowered(color);
-                if (sim.IsAbandoned(x, y)) color = Palette.Abandoned;
-                lots.Add((new Transform3D(Basis.Identity, centre + new Vector3(0, LotHeight, 0)), color));
-                if (TileModels.Building(map, x, y, sim.Content) is { } building)
+                bool powered = sim.Power.IsPowered(x, y), abandoned = sim.IsAbandoned(x, y);
+                if (!powered) color = Palette.Unpowered(color);
+                if (abandoned) color = Palette.Abandoned;
+                lotColors[y * map.Width + x] = color;
+                centre += new Vector3(0, LotHeight, 0);
+                if (TileModels.Building(map, x, y, sim.Content) is { } b)
                 {
-                    if (!transforms.TryGetValue(building.Model, out var built)) transforms[building.Model] = built = new List<Transform3D>();
-                    built.Add(Placed(building, centre + new Vector3(0, LotHeight, 0)));
+                    building = (b.Model, Placed(b, centre));
+                    if (tile.Kind == TileKind.Industrial && powered && !abandoned)
+                        _smokeSources[new Vector2I(x, y)] = (Top(b.Model, building.Value.Item2), 0.8f);
                 }
-                continue;
             }
-
-            placements.Clear();
-            TileModels.For(map, x, y, placements);
-            foreach (var p in placements)
+            else
             {
-                if (!transforms.TryGetValue(p.Model, out var list)) transforms[p.Model] = list = new List<Transform3D>();
-                list.Add(Placed(p, centre));
+                placements.Clear();
+                TileModels.For(map, x, y, placements);
+                if (placements.Count > 0) models = new List<(string, Transform3D)>(placements.Count);
+                foreach (var p in placements)
+                {
+                    var xf = Placed(p, centre);
+                    models.Add((p.Model, xf));
+                    if (p.Model == TileModels.PlantChimney && sim.Power.IsPowered(x, y))
+                        _smokeSources[new Vector2I(x, y)] = (Top(p.Model, xf), 1.3f);
+                }
             }
+            now[y * map.Width + x] = new TileDraw(tile.Kind, tile.Building, building, models, centre);
         }
+
+        if (!sameCity || _drawn.Length != now.Length)
+        {
+            _moving.Clear();
+            _sinking.Clear();
+            _fx.ClearSmoke();
+        }
+        else if (mapMoved && !_quiet && !WorldFx.ReduceMotion)
+        {
+            StartAnimations(_drawn, now, map.Width);
+        }
+        _drawn = now;
+
+        // Into the MultiMeshes, noting where each moving tile's instances land.
+        var transforms = new Dictionary<string, List<Transform3D>>();
+        var lots = new List<(Transform3D, Color)>();
+        var slots = new List<(TileAnimation Anim, string Model, int Index, Transform3D Xf)>();
+        var lotSlots = new List<(TileAnimation Anim, int Index, Transform3D Xf)>();
+        void Add(string model, Transform3D xf, TileAnimation? anim)
+        {
+            if (!transforms.TryGetValue(model, out var list)) transforms[model] = list = new List<Transform3D>();
+            list.Add(xf);
+            if (anim is not null) slots.Add((anim, model, list.Count - 1, xf));
+        }
+
+        for (int i = 0; i < now.Length; i++)
+        {
+            var d = now[i];
+            _moving.TryGetValue(new Vector2I(i % map.Width, i / map.Width), out var anim);
+            if (lotColors[i] is { } color)
+            {
+                var xf = new Transform3D(Basis.Identity, d.Base);
+                lots.Add((xf, color));
+                if (anim is { IncludesLot: true }) lotSlots.Add((anim, lots.Count - 1, xf));
+            }
+            if (d.BuildingModel is { } b) Add(b.Model, b.Xf, anim);
+            foreach (var (model, xf) in d.Models) Add(model, xf, anim);
+        }
+        foreach (var sink in _sinking)
+            foreach (var (model, xf) in sink.Ghost!) Add(model, xf, sink);
 
         // Models no longer on the map keep their (emptied) instance nodes for next time.
         foreach (var (key, mmi) in _instances)
@@ -187,7 +268,134 @@ public partial class CityWorld : Node3D
             _lots.Multimesh.SetInstanceColor(i, lots[i].Item2);
         }
 
+        // Hand each moving tile its instances, and put them where the motion has got to.
+        foreach (var a in _moving.Values) a.Slots.Clear();
+        foreach (var a in _sinking) a.Slots.Clear();
+        foreach (var (anim, path, index, xf) in slots)
+        {
+            if (LoadModel(path) is not { } model) continue;
+            for (int part = 0; part < model.Parts.Count; part++)
+                anim.Slots.Add((_instances[(path, part)].Multimesh, index, xf * model.Parts[part].Local));
+        }
+        foreach (var (anim, index, xf) in lotSlots) anim.Slots.Add((_lots.Multimesh, index, xf));
+        foreach (var a in _moving.Values) a.Apply(_time);
+        foreach (var a in _sinking) a.Apply(_time);
+
+        RefreshSmoke();
         _previewArea = null; // quotes may have changed with the map
+    }
+
+    // --- motion ---
+
+    // Compare what each tile drew with what it draws now and set the changes moving.
+    // A burst is staggered so it ripples; past the cap, changes simply appear.
+    private void StartAnimations(TileDraw[] before, TileDraw[] now, int width)
+    {
+        var started = new List<TileAnimation>();
+        var follows = new List<(TileAnimation Rise, TileAnimation After)>();
+        int budget = WorldFx.MaxAnimations - _moving.Count - _sinking.Count;
+        for (int i = 0; i < now.Length; i++)
+        {
+            TileDraw o = before[i], n = now[i];
+            bool kindChanged = o.Kind != n.Kind, buildingChanged = o.Building != n.Building;
+            if (!kindChanged && !buildingChanged) continue;
+            var tile = new Vector2I(i % width, i / width);
+            _moving.Remove(tile);
+            if (budget <= 0) continue;
+
+            // What went: a building or plant sinks; a cleared road, line or lot just puffs.
+            List<(string Model, Transform3D Xf)>? ghost = null;
+            if (o.BuildingModel is { } ob && buildingChanged) ghost = [ob];
+            else if (kindChanged && o.Kind == TileKind.PowerPlant && o.Models.Count > 0) ghost = o.Models;
+            TileAnimation? sink = null;
+            if (ghost is not null)
+            {
+                sink = new TileAnimation { Tile = tile, Motion = Motion.Sink, Pivot = o.Base, Ghost = ghost, PuffSize = 1f };
+                started.Add(sink);
+                _sinking.Add(sink);
+                budget--;
+            }
+            else if (kindChanged && n.Kind == TileKind.Empty)
+            {
+                _fx.Puff(o.Base, 0.6f);
+            }
+
+            // What came: a building or plant rises; anything else the player laid pops.
+            TileAnimation? add = null;
+            if (n.BuildingModel is not null && buildingChanged)
+                add = new TileAnimation { Tile = tile, Motion = Motion.Rise, Pivot = n.Base, PuffSize = 0.9f };
+            else if (kindChanged && n.Kind == TileKind.PowerPlant)
+                add = new TileAnimation { Tile = tile, Motion = Motion.Rise, Pivot = n.Base, PuffSize = 1.2f };
+            else if (kindChanged && n.Kind != TileKind.Empty)
+                add = new TileAnimation { Tile = tile, Motion = Motion.Pop, Pivot = n.Base, IncludesLot = TileModels.IsLot(n.Kind) };
+            if (add is null) continue;
+            _moving[tile] = add;
+            budget--;
+            // A rebuilt lot: the new building rises as the old one is nearly gone.
+            if (sink is not null) follows.Add((add, sink));
+            else started.Add(add);
+        }
+
+        float step = Mathf.Min(WorldFx.StaggerStep, WorldFx.MaxStagger / Mathf.Max(1, started.Count));
+        for (int k = 0; k < started.Count; k++) started[k].Start = _time + k * step;
+        foreach (var (rise, after) in follows) rise.Start = after.Start + WorldFx.SinkSeconds * 0.7;
+    }
+
+    // Each frame: advance whatever is moving. Finished rises rest and may start smoking;
+    // finished sinks drop their ghost at the next rebuild.
+    private void StepAnimations()
+    {
+        if (_moving.Count == 0 && _sinking.Count == 0) return;
+        List<Vector2I>? finished = null;
+        foreach (var (tile, a) in _moving)
+        {
+            Begin(a);
+            if (!a.Done(_time)) { a.Apply(_time); continue; }
+            a.Settle();
+            (finished ??= new List<Vector2I>()).Add(tile);
+        }
+        if (finished is not null)
+        {
+            foreach (var tile in finished) _moving.Remove(tile);
+            RefreshSmoke();
+        }
+
+        for (int i = _sinking.Count - 1; i >= 0; i--)
+        {
+            var a = _sinking[i];
+            Begin(a);
+            a.Apply(_time);
+            if (!a.Done(_time)) continue;
+            _sinking.RemoveAt(i);
+            _fxRebuild = true;
+        }
+
+        void Begin(TileAnimation a)
+        {
+            if (a.Puffed || !a.Started(_time)) return;
+            a.Puffed = true;
+            if (a.PuffSize > 0) _fx.Puff(a.Pivot + new Vector3(0, 0.04f, 0), a.PuffSize);
+        }
+    }
+
+    // Smoke from working industry and powered plants, but not from a building still rising.
+    private void RefreshSmoke()
+    {
+        var sources = new Dictionary<Vector2I, (Vector3 At, float Size)>();
+        if (WorldFx.Smoke)
+            foreach (var (tile, source) in _smokeSources)
+                if (!_moving.TryGetValue(tile, out var a) || a.Motion != Motion.Rise)
+                    sources[tile] = source;
+        _fx.SetSmoke(sources);
+    }
+
+    // The middle of a placed model's top, in world space.
+    private Vector3 Top(string path, Transform3D xf)
+    {
+        if (LoadModel(path) is not { } model) return xf.Origin;
+        var box = xf * model.Bounds;
+        var c = box.GetCenter();
+        return new Vector3(c.X, box.End.Y, c.Z);
     }
 
     // Model space to world space for one placement on a tile.
