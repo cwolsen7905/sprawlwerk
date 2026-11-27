@@ -7,7 +7,7 @@ namespace SprawlWerk.Sim;
 /// frame rate: the renderer can draw at 144 fps or 30, and the city still
 /// evolves identically.
 /// </summary>
-public sealed class Simulation
+public sealed partial class Simulation
 {
     /// <summary>Funds a new city starts with unless told otherwise (a placeholder).</summary>
     public const long DefaultStartingFunds = 20_000;
@@ -60,6 +60,9 @@ public sealed class Simulation
 
     public int IndustrialJobs { get; private set; }
 
+    /// <summary>What a load could not keep (e.g. buildings from a pack that is not loaded); empty otherwise.</summary>
+    public IReadOnlyList<string> LoadReport { get; internal set; } = [];
+
     public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null,
         PowerRules? power = null, ContentSet? content = null, GrowthRules? growth = null, ulong seed = CityRandom.DefaultSeed)
     {
@@ -75,17 +78,18 @@ public sealed class Simulation
     }
 
     /// <summary>Set the clock and rebuild derived state after a load; the map is already filled in.</summary>
-    internal void Restore(long tick, ulong randomState)
+    internal void Restore(long tick, ulong randomState, Demand? demand)
     {
         Tick = tick;
         Random.State = randomState;
+        if (demand is { } d) { Demand = d; _demandStarted = true; }
         RecomputeNetworks();
         Recount();
     }
 
     private void RecomputeNetworks()
     {
-        Power.Recompute(Map);
+        Power.Recompute(Map, Content);
         Roads.Recompute(Map);
         _networksDirty = false;
     }
@@ -152,6 +156,14 @@ public sealed class Simulation
         if (_networksDirty)
         {
             RecomputeNetworks();
+            Recount();
+        }
+
+        if (CityDate.IsMonthStart(Tick)) UpdateDemand();
+
+        if (Tick % Growth.GrowthEvery == Growth.GrowthOffset && GrowthPass())
+        {
+            _networksDirty = true; // new buildings draw power; recompute next tick
             Recount();
         }
 
