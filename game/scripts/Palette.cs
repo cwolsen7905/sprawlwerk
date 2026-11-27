@@ -12,6 +12,21 @@ public static class Palette
 {
     public static readonly Color Ground = new("26302a");
 
+    // The 3D world. Sky, sun and grass follow the low-poly style test; the
+    // zone hues stay the same as the 2D view's so the two views agree.
+    public static readonly Color Grass = new("7da35a");
+    public static readonly Color GrassOutside = new("5f8445");
+    public static readonly Color GridLine = new("2f4a24");
+    public static readonly Color SkyTop = new("6f9fd8");
+    public static readonly Color SkyHorizon = new("d9e6f2");
+    public static readonly Color Sunlight = new("fff2df");
+
+    /// <summary>A zone's flat lot in the 3D view.</summary>
+    public static Color Lot(TileKind kind) => For(kind).Darkened(0.2f);
+
+    /// <summary>Zones without power are drawn dim, in both views: the first piece of feedback.</summary>
+    public static Color Unpowered(Color color) => color.Darkened(0.55f);
+
     public static Color For(TileKind kind) => kind switch
     {
         TileKind.Residential => new Color("009e73"), // bluish green

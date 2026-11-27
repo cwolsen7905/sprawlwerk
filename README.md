@@ -40,21 +40,24 @@ dotnet test
 
 **The game:** open `game/project.godot` in Godot (.NET) and press Play (F5).
 
-Pick a tool from the Build toolbar on the left, or press `1` residential,
-`2` commercial, `3` industrial, `4` road, `5` power line, `6` power plant,
-`0` bulldoze. Click to place one tile; drag to fill a rectangle (zones,
-bulldoze) or a straight line (road, power line); the cost shows in the status
-bar while you drag, and Escape cancels. The status bar also names the tile
+The city is drawn in 3D. Pick a tool from the Build toolbar on the left, or
+press `1` residential, `2` commercial, `3` industrial, `4` road, `5` power
+line, `6` power plant, `0` bulldoze. Click to place one tile; drag to fill a
+rectangle (zones, bulldoze) or a straight line (road, power line); the tiles
+light up and the cost shows in the status bar while you drag (red when it
+would be refused), and Escape cancels. The status bar also names the tile
 under the cursor and whether it has power; zones without power are drawn dim.
 
-Move the camera with `WASD` or the arrow keys, or drag with the right or
-middle mouse button; the wheel zooms toward the cursor. The top bar shows
-funds, date and power demand against supply, with pause and speed buttons
-(also `Space`, `-` and `=`) and a Menu button (also `Escape`) for the pause
-menu, which holds Save and the volume sliders. `F5` saves and `F9` loads one
-quick slot; Load is on the title menu.
+Move the camera with `WASD` or the arrow keys, or drag the ground with the
+right mouse button; the wheel zooms toward the cursor; `Q` and `E` or a
+middle-drag rotate (dragging up and down also tilts). The top bar shows funds,
+date and power demand against supply, with pause and speed buttons (also
+`Space`, `-` and `=`) and a Menu button (also `Escape`) for the pause menu,
+which holds Save and the volume sliders. `F5` saves and `F9` loads one quick
+slot; Load is on the title menu. `F3` swaps to the flat 2D debug view and back.
 
-To skip the title menu while developing: `godot --path game -- --new-city`.
+To skip the title menu while developing: `godot --path game -- --new-city`
+(an empty city) or `-- --demo-city` (a small demo town).
 
 ## What works today
 
@@ -66,8 +69,11 @@ To skip the title menu while developing: `godot --path game -- --new-city`.
 - A minimal title menu and pause menu
 - Versioned JSON saves, written atomically; monthly autosave and Continue on the title menu; a loaded city continues exactly as the saved one would
 - A calendar derived from ticks, pause and three speeds
-- Isometric debug view in Godot with tile picking, a build toolbar, top and
-  status bars, and a camera that pans and zooms
+- A 3D view in Godot: low-poly roads that join into bends, junctions and dead
+  ends, power poles, a power plant, zones as tinted lots; sun, soft shadows and
+  ambient occlusion; a camera that pans, zooms, rotates and tilts; tile picking
+  with a live drag preview
+- The build toolbar, top and status bars, and a flat 2D debug view (F3)
 - Music, city ambience and sound effects, with volume sliders on the pause menu
 
 ## Contributing
