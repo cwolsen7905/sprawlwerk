@@ -17,8 +17,8 @@ public partial class SaveBrowser : Control
 {
     public enum BrowserMode { Load, Save }
 
-    private static readonly Color ErrorColor = new("e86f5c");
-    private static readonly Color OkColor = new("8fd18a");
+    private static readonly Color ErrorColor = Palette.Ui.DangerText;
+    private static readonly Color OkColor = Palette.Ui.Primary;
 
     private readonly CityController _city;
     private readonly List<SaveEntry> _entries = new();
@@ -47,9 +47,10 @@ public partial class SaveBrowser : Control
     public override void _Ready()
     {
         Visible = false;
+        Theme = UiTheme.Theme;
         SetAnchorsPreset(LayoutPreset.FullRect);
 
-        var dim = new ColorRect { Color = new Color(0, 0, 0, 0.55f) };
+        var dim = new ColorRect { Color = Palette.Ui.Backdrop };
         dim.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(dim);
 
@@ -59,9 +60,12 @@ public partial class SaveBrowser : Control
 
         var box = new VBoxContainer { CustomMinimumSize = new Vector2(520, 0) };
         box.AddThemeConstantOverride("separation", 10);
-        center.AddChild(box);
+        var panel = new PanelContainer();
+        panel.AddThemeStyleboxOverride("panel", UiTheme.PanelBox(pad: 18));
+        center.AddChild(panel);
+        panel.AddChild(box);
 
-        _heading = new Label { HorizontalAlignment = HorizontalAlignment.Center };
+        _heading = new Label { HorizontalAlignment = HorizontalAlignment.Center, ThemeTypeVariation = UiTheme.Heading };
         box.AddChild(_heading);
 
         _list = new ItemList { CustomMinimumSize = new Vector2(0, 220) };

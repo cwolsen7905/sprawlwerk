@@ -7,7 +7,8 @@ namespace SprawlWerk;
 /// <summary>
 /// The minimal game shell over the city: a title menu (Continue when a save exists,
 /// New city, Load, Quit) and a pause overlay (Resume, Save, Quit); Load and Save open the
-/// <see cref="SaveBrowser"/>. Escape cancels a drag first; otherwise
+/// <see cref="SaveBrowser"/>. Escape cancels a drag first, then lets the HUD
+/// close what it has open (<see cref="HandleEscape"/>); otherwise
 /// it opens or closes the pause overlay. While a menu is up the city
 /// is inactive, so no time passes and clicks do not reach the map.
 /// The pause overlay also holds the volume sliders (<see cref="AudioDirector"/>).
@@ -26,6 +27,9 @@ public partial class ShellMenu : CanvasLayer
 
     /// <summary>True once a city is in play (after New, Load or Continue), including while paused.</summary>
     public bool Playing => _playing;
+
+    /// <summary>Set by the HUD: close its window, then its query card, then go back to the query tool; false when it had nothing to do.</summary>
+    public System.Func<bool>? HandleEscape { get; set; }
 
     /// <summary>Open the pause overlay, as Escape does; the HUD's Menu button uses it.</summary>
     public void OpenPause()
@@ -81,7 +85,7 @@ public partial class ShellMenu : CanvasLayer
         if (!_playing) return;
 
         if (_pause.Visible) Resume();
-        else if (!_city.CancelDrag()) ShowPanel(_pause);
+        else if (!_city.CancelDrag() && !(HandleEscape?.Invoke() ?? false)) ShowPanel(_pause);
         GetViewport().SetInputAsHandled();
     }
 
@@ -160,10 +164,10 @@ public partial class ShellMenu : CanvasLayer
 
     private Control BuildPanel(string heading, params (string Text, System.Action OnPress)[] buttons)
     {
-        var root = new Control { Visible = false };
+        var root = new Control { Visible = false, Theme = UiTheme.Theme };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 
-        var dim = new ColorRect { Color = new Color(0, 0, 0, 0.55f) };
+        var dim = new ColorRect { Color = Palette.Ui.Backdrop };
         dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(dim);
 
@@ -171,11 +175,16 @@ public partial class ShellMenu : CanvasLayer
         center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(center);
 
-        var box = new VBoxContainer { Name = "Box", CustomMinimumSize = new Vector2(220, 0) };
-        box.AddThemeConstantOverride("separation", 10);
-        center.AddChild(box);
+        // Themed by UiTheme (set on the root window): a paper panel, ink border and hard shadow.
+        var panel = new PanelContainer();
+        panel.AddThemeStyleboxOverride("panel", UiTheme.PanelBox(pad: 18));
+        center.AddChild(panel);
 
-        box.AddChild(new Label { Text = heading, HorizontalAlignment = HorizontalAlignment.Center });
+        var box = new VBoxContainer { Name = "Box", CustomMinimumSize = new Vector2(240, 0) };
+        box.AddThemeConstantOverride("separation", 10);
+        panel.AddChild(box);
+
+        box.AddChild(new Label { Text = heading, HorizontalAlignment = HorizontalAlignment.Center, ThemeTypeVariation = UiTheme.Heading });
         foreach (var (text, onPress) in buttons)
         {
             var button = new Button { Text = text, Name = text };
@@ -188,7 +197,7 @@ public partial class ShellMenu : CanvasLayer
             Name = "Status",
             HorizontalAlignment = HorizontalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            Modulate = new Color("e86f5c"),
+            ThemeTypeVariation = UiTheme.Danger,
         });
         return root;
     }

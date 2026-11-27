@@ -8,7 +8,7 @@ namespace SprawlWerk;
 /// flat isometric diamonds (immediate-mode drawing, no art), so rules can be
 /// checked tile by tile. Everything that is not drawing (time, tools, drags,
 /// saves) is in <see cref="CityController"/>; this view only draws it and
-/// reports the tile under the pointer.
+/// reports the tile under the pointer (and, with the query tool, the one clicked).
 ///
 /// Camera: WASD or the arrow keys pan, right- or middle-drag pans, the wheel zooms toward the cursor.
 /// </summary>
@@ -66,6 +66,7 @@ public partial class CityView : Node2D
                 break;
 
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } mb:
+                if (mb.Pressed && _city.Tool is null && !_city.PointerOverUi()) _city.Inspected = _city.Hover;
                 if (mb.Pressed) _city.BeginDrag();
                 else _city.FinishDrag(ScreenToTile(GetLocalMousePosition()));
                 break;
