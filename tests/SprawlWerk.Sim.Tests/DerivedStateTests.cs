@@ -57,10 +57,11 @@ public class DerivedStateTests
     [Fact]
     public void A_tile_holds_only_stored_fields()
     {
-        // Height and Kind, one byte each. A derived flag added here again would grow it.
-        Assert.Equal(2, Marshal.SizeOf<Tile>());
+        // Height and Kind, one byte each, and the grown building's type handle (two
+        // bytes): all stored state. A derived flag added here again would grow it.
+        Assert.Equal(4, Marshal.SizeOf<Tile>());
         var fields = typeof(Tile).GetFields().Select(f => f.Name).Order();
-        Assert.Equal(new[] { "Height", "Kind" }, fields);
+        Assert.Equal(new[] { "Building", "Height", "Kind" }, fields);
     }
 
     [Fact]

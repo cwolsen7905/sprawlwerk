@@ -44,8 +44,24 @@ public sealed class Simulation
     /// </summary>
     public ContentSet? Content { get; }
 
+    /// <summary>Numbers for demand, growth and decline (ADR 0012).</summary>
+    public GrowthRules Growth { get; }
+
+    /// <summary>The city's only source of chance; its state is saved.</summary>
+    public CityRandom Random { get; }
+
+    /// <summary>How far each tile is from a road; derived, rebuilt with the networks.</summary>
+    public RoadAccess Roads { get; }
+
+    /// <summary>People living in buildings that are lived in (abandonment comes with decline).</summary>
+    public int Residents { get; private set; }
+
+    public int CommercialJobs { get; private set; }
+
+    public int IndustrialJobs { get; private set; }
+
     public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null,
-        PowerRules? power = null, ContentSet? content = null)
+        PowerRules? power = null, ContentSet? content = null, GrowthRules? growth = null, ulong seed = CityRandom.DefaultSeed)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(startingFunds);
         Content = content;
@@ -53,14 +69,48 @@ public sealed class Simulation
         Power = new PowerGrid(width, height, power ?? (content is null ? null : PowerRules.FromContent(content)));
         Funds = startingFunds;
         Prices = prices ?? (content is null ? PriceList.Default : PriceList.FromContent(content));
+        Growth = growth ?? GrowthRules.Default;
+        Random = new CityRandom(seed);
+        Roads = new RoadAccess(width, height, Growth.RoadAccess);
     }
 
     /// <summary>Set the clock and rebuild derived state after a load; the map is already filled in.</summary>
-    internal void Restore(long tick)
+    internal void Restore(long tick, ulong randomState)
     {
         Tick = tick;
+        Random.State = randomState;
+        RecomputeNetworks();
+        Recount();
+    }
+
+    private void RecomputeNetworks()
+    {
         Power.Recompute(Map);
+        Roads.Recompute(Map);
         _networksDirty = false;
+    }
+
+    /// <summary>
+    /// Residents and jobs: each tile's building counts its type's numbers once
+    /// (every grown building is one tile until multi-tile lots).
+    /// </summary>
+    private void Recount()
+    {
+        int residents = 0, commercial = 0, industrial = 0;
+        if (Content is { } content)
+        {
+            for (int y = 0; y < Map.Height; y++)
+            for (int x = 0; x < Map.Width; x++)
+            {
+                var handle = Map[x, y].Building;
+                if (handle.IsNone) continue;
+                var type = content[handle];
+                residents += type.Residents;
+                if (type.Zone == ZoneKind.Commercial) commercial += type.Jobs;
+                else if (type.Zone == ZoneKind.Industrial) industrial += type.Jobs;
+            }
+        }
+        (Residents, CommercialJobs, IndustrialJobs) = (residents, commercial, industrial);
     }
 
     /// <summary>Queue a player action; it is applied at the start of the next tick.</summary>
@@ -95,11 +145,14 @@ public sealed class Simulation
             _lastOutcomes.Add(new CommandOutcome(command, result));
         }
 
-        // Networks only change when the map does, so skip the flood fill otherwise.
+        // Order within a tick (ADR 0012): commands; networks if the map changed;
+        // then, as they arrive, the monthly passes (decline, economy, demand) and
+        // the growth pass, each followed by a recount.
+        // Networks only change when the map does, so skip the flood fills otherwise.
         if (_networksDirty)
         {
-            Power.Recompute(Map);
-            _networksDirty = false;
+            RecomputeNetworks();
+            Recount();
         }
 
         Tick++;

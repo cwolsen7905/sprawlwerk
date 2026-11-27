@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "house",
+  "role": "building",
+  "zone": "residential",
+  "density": "low",
+  "size": [1, 1],
+  "cost": 0,
+  "residents": 8,
+  "powerUse": 1
+}

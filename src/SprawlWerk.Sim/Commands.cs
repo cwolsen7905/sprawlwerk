@@ -52,7 +52,12 @@ public sealed record PlaceCommand(int X, int Y, int Width, int Height, TileKind 
         for (int y = Y; y < Y + Height; y++)
         for (int x = X; x < X + Width; x++)
         {
-            if (map.InBounds(x, y)) map[x, y].Kind = Resulting(map[x, y].Kind, Kind);
+            if (!map.InBounds(x, y)) continue;
+            ref var tile = ref map[x, y];
+            var result = Resulting(tile.Kind, Kind);
+            if (result == tile.Kind) continue;
+            tile.Kind = result;
+            tile.Building = default; // what grew there was for the old use
         }
     }
 

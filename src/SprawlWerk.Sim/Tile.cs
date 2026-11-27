@@ -1,3 +1,5 @@
+using SprawlWerk.Sim.Content;
+
 namespace SprawlWerk.Sim;
 
 /// <summary>What a tile is zoned or built as.</summary>
@@ -26,6 +28,13 @@ public struct Tile
     public byte Height;
 
     public TileKind Kind;
+
+    /// <summary>
+    /// The building that has grown on this zone tile, or none. Set only by the
+    /// simulation's growth, never by the player; cleared whenever the tile's
+    /// kind changes. Refers to a type in the simulation's content.
+    /// </summary>
+    public TypeHandle Building;
 
     public readonly bool IsZone =>
         Kind is TileKind.Residential or TileKind.Commercial or TileKind.Industrial;

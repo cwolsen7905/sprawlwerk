@@ -10,6 +10,10 @@ public readonly record struct CityDate(int Year, int Month, int Day)
     public const int TicksPerDay = 4;
     public const int DaysPerMonth = 30;
     public const int MonthsPerYear = 12;
+    public const int TicksPerMonth = TicksPerDay * DaysPerMonth;
+
+    /// <summary>True on the first tick of a month, tick 0 included; monthly passes run then.</summary>
+    public static bool IsMonthStart(long tick) => tick >= 0 && tick % TicksPerMonth == 0;
 
     /// <summary>The date at a tick count. Year, month and day all start at 1.</summary>
     public static CityDate FromTick(long tick)

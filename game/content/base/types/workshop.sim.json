@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "workshop",
+  "role": "building",
+  "zone": "industrial",
+  "density": "low",
+  "size": [1, 1],
+  "cost": 0,
+  "jobs": 6,
+  "powerUse": 2
+}

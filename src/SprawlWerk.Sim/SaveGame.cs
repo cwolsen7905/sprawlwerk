@@ -46,6 +46,9 @@ public static class SaveGame
 
         /// <summary>One array per row of terrain heights.</summary>
         public int[][]? Heights { get; set; }
+
+        /// <summary>The city's random generator state; absent in older saves, which start from the default seed.</summary>
+        public ulong? Random { get; set; }
     }
 
     private static char CharFor(TileKind kind) => KindChars[(int)kind];
@@ -74,6 +77,7 @@ public static class SaveGame
             Height = map.Height,
             Tick = sim.Tick,
             Funds = sim.Funds,
+            Random = sim.Random.State,
             Kinds = kinds,
             Heights = heights,
         }, Options);
@@ -129,7 +133,7 @@ public static class SaveGame
             }
         }
 
-        sim.Restore(data.Tick);
+        sim.Restore(data.Tick, data.Random ?? CityRandom.DefaultSeed);
         return sim;
     }
 
