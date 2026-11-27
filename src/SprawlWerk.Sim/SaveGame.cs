@@ -11,9 +11,10 @@ public readonly record struct SaveInfo(int Version, int Width, int Height, long 
 
 /// <summary>
 /// Saves and loads a city as versioned JSON. Only stored state goes in: the
-/// terrain and what is built, funds and the tick. Derived state (power) is
-/// rebuilt on load, and commands still queued are not saved, so save between
-/// ticks, as the game does. Prices and power rules are game configuration,
+/// terrain and what is built, funds (negative is debt), tax rates, last
+/// month's budget and the tick. Derived state (power) is rebuilt on load,
+/// and commands still queued are not saved, so save between ticks, as the
+/// game does. Prices and power rules are game configuration,
 /// not city state, and are supplied when loading.
 ///
 /// Kinds are written as one character per tile so a save stays readable and
@@ -58,6 +59,12 @@ public static class SaveGame
 
         /// <summary>Buildings in decline: tile, bad months, abandoned. Absent in older saves (all well).</summary>
         public List<StressEntry>? Stress { get; set; }
+
+        /// <summary>Tax rates for R, C and I in percent; absent in older saves, which start at the neutral rate.</summary>
+        public int[]? Taxes { get; set; }
+
+        /// <summary>The last month settled; absent in older saves and before the first month ends.</summary>
+        public BudgetEntry? LastBudget { get; set; }
     }
 
     private sealed class StressEntry
@@ -66,6 +73,17 @@ public static class SaveGame
         public int Y { get; set; }
         public int Months { get; set; }
         public bool Abandoned { get; set; }
+    }
+
+    private sealed class BudgetEntry
+    {
+        public long ResidentialTax { get; set; }
+        public long CommercialTax { get; set; }
+        public long IndustrialTax { get; set; }
+        public long RoadUpkeep { get; set; }
+        public long PowerLineUpkeep { get; set; }
+        public long PlantUpkeep { get; set; }
+        public long ZoneUpkeep { get; set; }
     }
 
     private sealed class BuildingEntry
@@ -105,6 +123,13 @@ public static class SaveGame
             Demand = sim.DemandStarted ? [sim.Demand.Residential, sim.Demand.Commercial, sim.Demand.Industrial] : null,
             Buildings = BuildingsOf(sim),
             Stress = sim.StressedBuildings().Select(s => new StressEntry { X = s.X, Y = s.Y, Months = s.Stress, Abandoned = s.Abandoned }).ToList(),
+            Taxes = [sim.Taxes.Residential, sim.Taxes.Commercial, sim.Taxes.Industrial],
+            LastBudget = sim.LastBudget is { } b ? new BudgetEntry
+            {
+                ResidentialTax = b.ResidentialTax, CommercialTax = b.CommercialTax, IndustrialTax = b.IndustrialTax,
+                RoadUpkeep = b.RoadUpkeep, PowerLineUpkeep = b.PowerLineUpkeep, PlantUpkeep = b.PlantUpkeep,
+                ZoneUpkeep = b.ZoneUpkeep,
+            } : null,
             Kinds = kinds,
             Heights = heights,
         }, Options);
@@ -149,11 +174,10 @@ public static class SaveGame
 
         if (data.Width <= 0 || data.Height <= 0) throw new SaveFormatException("the map size is not positive");
         if (data.Tick < 0) throw new SaveFormatException("the tick is negative");
-        if (data.Funds < 0) throw new SaveFormatException("the funds are negative");
         if (data.Kinds is null || data.Kinds.Length != data.Height) throw new SaveFormatException("the tile rows do not match the map height");
         if (data.Heights is null || data.Heights.Length != data.Height) throw new SaveFormatException("the height rows do not match the map height");
 
-        var sim = new Simulation(data.Width, data.Height, data.Funds, prices, power, content);
+        var sim = new Simulation(data.Width, data.Height, 0, prices, power, content);
         for (int y = 0; y < data.Height; y++)
         {
             if (data.Kinds[y] is not { } row || row.Length != data.Width)
@@ -190,6 +214,16 @@ public static class SaveGame
         }
         Demand? demand = data.Demand is { Length: 3 } d ? new Demand(d[0], d[1], d[2]) : null;
         if (data.Demand is not null && demand is null) throw new SaveFormatException("demand must have three values");
+        TaxRates? taxes = data.Taxes switch
+        {
+            null => null,
+            { Length: 3 } t when t.All(r => r is >= BudgetRules.MinTax and <= BudgetRules.MaxTax) => new TaxRates(t[0], t[1], t[2]),
+            _ => throw new SaveFormatException($"taxes must be three rates from {BudgetRules.MinTax} to {BudgetRules.MaxTax}"),
+        };
+        MonthlyBudget? lastBudget = data.LastBudget is { } lb
+            ? new MonthlyBudget(lb.ResidentialTax, lb.CommercialTax, lb.IndustrialTax, lb.RoadUpkeep, lb.PowerLineUpkeep, lb.PlantUpkeep, lb.ZoneUpkeep)
+            : null;
+        sim.RestoreBudget(data.Funds, taxes, lastBudget); // funds may be negative (debt)
         sim.Restore(data.Tick, data.Random ?? CityRandom.DefaultSeed, demand);
         sim.LoadReport = report;
         return sim;

@@ -20,7 +20,7 @@ public sealed partial class Simulation
 
     public PriceList Prices { get; }
 
-    /// <summary>Money the city has. Commands it cannot afford are refused whole.</summary>
+    /// <summary>Money the city has; negative is debt. Commands it cannot afford are refused whole.</summary>
     public long Funds { get; private set; }
 
     /// <summary>Ticks elapsed since the city was founded.</summary>
@@ -134,7 +134,7 @@ public sealed partial class Simulation
     public CommandResult Quote(ICommand command)
     {
         var plan = command.Plan(Map, Prices);
-        if (plan.Accepted && plan.Cost > Funds)
+        if (plan.Accepted && plan.Cost > 0 && plan.Cost > Funds) // a free command goes through even in debt
             return CommandResult.Refuse(Refusal.InsufficientFunds, plan.Cost);
         return plan;
     }
@@ -147,7 +147,12 @@ public sealed partial class Simulation
         {
             var command = _pending.Dequeue();
             var result = Quote(command);
-            if (result.Accepted)
+            if (result.Accepted && command is ICitySetting setting)
+            {
+                setting.Apply(this);
+                Funds -= result.Cost;
+            }
+            else if (result.Accepted)
             {
                 command.Execute(Map);
                 Funds -= result.Cost;
@@ -174,6 +179,7 @@ public sealed partial class Simulation
             if (cleared) _networksDirty = true; // cleared buildings use less power
             if (changed) MapRevision++;
             Recount();
+            SettleMonth(); // after decline, so abandoned buildings pay no tax
             UpdateDemand();
         }
 
