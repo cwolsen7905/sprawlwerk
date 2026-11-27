@@ -6,6 +6,18 @@ its licence is not one of: `CC0-1.0`, `CC-BY-3.0`, `CC-BY-4.0`.
 The credits screen is built from this list.
 
 Files were renamed on the way in; the original name is in the Notes column.
+A row whose path ends in `/` covers every file in that directory; model kits
+are listed that way, with the kit's own licence file kept alongside.
+
+## Models
+
+Only the pieces the game uses are copied, with their original names and the
+kit's shared texture (`Textures/colormap.png`).
+
+| File | Title | Author | Source | Licence | Notes |
+|---|---|---|---|---|---|
+| `game/assets/models/kenney/city-kit-roads/` | City Kit (Roads) | Kenney | https://kenney.nl/assets/city-kit-roads | CC0-1.0 | Road pieces and electricity pole, GLB; `License.txt` included |
+| `game/assets/models/kenney/city-kit-industrial/` | City Kit (Industrial) | Kenney | https://kenney.nl/assets/city-kit-industrial | CC0-1.0 | `building-c` and `chimney-large` (power plant), GLB; `License.txt` included |
 
 ## Sound effects
 

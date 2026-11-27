@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Fails if a file under game/assets/ is not listed in ASSETS.md, or is listed
-# with a licence that is not allowed. Godot's .import sidecars are skipped.
+# with a licence that is not allowed. A row whose path ends in `/` covers every
+# file beneath that directory (used for model kits, which ship as many files
+# under one licence). Godot's .import sidecars are skipped.
 # Run from anywhere; CI runs it on every push. Usage: tools/check-assets.sh
 set -euo pipefail
 
@@ -13,8 +15,22 @@ if [ ! -d game/assets ]; then
   exit 0
 fi
 
+# Directory rows, as listed (each ends in /).
+dirs=$(grep -oE '^\| `game/assets/[^`]+/`' ASSETS.md | sed -E 's/^\| `//; s/`$//' || true)
+
 while IFS= read -r -d '' file; do
   row=$(grep -F "| \`$file\` |" ASSETS.md || true)
+  if [ -z "$row" ]; then
+    # The deepest directory row that contains the file.
+    best=""
+    while IFS= read -r dir; do
+      [ -n "$dir" ] || continue
+      case "$file" in
+        "$dir"*) [ "${#dir}" -gt "${#best}" ] && best=$dir ;;
+      esac
+    done <<< "$dirs"
+    [ -n "$best" ] && row=$(grep -F "| \`$best\` |" ASSETS.md)
+  fi
   if [ -z "$row" ]; then
     echo "check-assets: FAILED: $file is not listed in ASSETS.md" >&2
     fail=1
@@ -28,9 +44,12 @@ while IFS= read -r -d '' file; do
   fi
 done < <(find game/assets -type f ! -name '*.import' ! -name '.DS_Store' -print0 | sort -z)
 
-# Listed files that no longer exist.
+# Listed files and directories that no longer exist.
 while IFS= read -r listed; do
-  [ -f "$listed" ] || { echo "check-assets: FAILED: ASSETS.md lists $listed, which does not exist" >&2; fail=1; }
+  case "$listed" in
+    */) [ -d "$listed" ] || { echo "check-assets: FAILED: ASSETS.md lists $listed, which does not exist" >&2; fail=1; } ;;
+    *) [ -f "$listed" ] || { echo "check-assets: FAILED: ASSETS.md lists $listed, which does not exist" >&2; fail=1; } ;;
+  esac
 done < <(grep -oE '^\| `game/assets/[^`]+`' ASSETS.md | sed -E 's/^\| `//; s/`$//')
 
 if [ "$fail" -eq 0 ]; then
