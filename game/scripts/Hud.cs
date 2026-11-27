@@ -1,17 +1,20 @@
 using System.Collections.Generic;
 using Godot;
 using SprawlWerk.Sim;
+using SprawlWerk.Sim.Content;
 
 namespace SprawlWerk;
 
 /// <summary>
 /// The in-game interface over the city: a build toolbar on the left (one
-/// button per tool with its colour, price and key), a top bar (funds, date,
-/// power, pause and speed, Menu) and a status line at the bottom (the tile
-/// under the cursor, the cost of what the tool would do, notices and
-/// refusals). It reads <see cref="CityController"/> every frame and changes only
-/// its tool, pause and speed; building still goes through commands. Hidden on
-/// the title menu.
+/// button per tool with its colour, price and key), a top bar (funds and last
+/// month's net, date, power, pause and speed, Budget, Menu), a budget panel
+/// (last month's taxes and upkeep, tax rates with - and + buttons) and a
+/// status line at the bottom (the tile under the cursor, the cost of what the
+/// tool would do, notices and refusals). It reads <see cref="CityController"/>
+/// every frame and changes only its tool, pause and speed; building and tax
+/// changes still go through commands. Hidden on the title menu. The developer
+/// flag <c>--open-budget</c> opens the budget panel at start (for screenshots).
 /// </summary>
 public partial class Hud : CanvasLayer
 {
@@ -38,6 +41,11 @@ public partial class Hud : CanvasLayer
     private readonly List<Button> _speedButtons = new();
     private Button _pauseButton = null!;
     private Label _funds = null!;
+    private Label _net = null!;
+    private Control _budget = null!;
+    private Label _budgetNote = null!;
+    private readonly Dictionary<string, Label> _budgetValues = new();
+    private readonly Dictionary<ZoneKind, Label> _taxLabels = new();
     private Label _date = null!;
     private Label _power = null!;
     private Label _people = null!;
@@ -54,6 +62,8 @@ public partial class Hud : CanvasLayer
         BuildTopBar();
         BuildToolbar();
         BuildStatusBar();
+        BuildBudgetPanel();
+        _budget.Visible = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--open-budget") >= 0;
     }
 
     public override void _Process(double delta)
@@ -63,6 +73,10 @@ public partial class Hud : CanvasLayer
         var sim = _city.Sim;
 
         _funds.Text = Strings.Funds(sim.Funds);
+        _funds.Modulate = sim.Funds < 0 ? Problem : Colors.White;
+        _net.Text = sim.LastBudget is { } last ? Strings.MonthlyNet(last.Net) : "";
+        _net.Modulate = sim.LastBudget is { Net: < 0 } ? Problem : Good;
+        if (_budget.Visible) UpdateBudgetPanel(sim);
         _date.Text = sim.Date.ToString();
         _power.Text = Strings.Power(sim.Power.Demand, sim.Power.Supply);
         _power.Modulate = sim.Power.ZonesWithoutSupply > 0 ? Warning : Colors.White;
@@ -143,11 +157,16 @@ public partial class Hud : CanvasLayer
         panel.AddChild(row);
 
         _funds = new Label();
+        _net = new Label();
         _date = new Label();
         _power = new Label();
         _people = new Label();
         _demand = new Label();
-        row.AddChild(_funds);
+        var money = new HBoxContainer();
+        money.AddThemeConstantOverride("separation", 6);
+        money.AddChild(_funds);
+        money.AddChild(_net);
+        row.AddChild(money);
         row.AddChild(_date);
         row.AddChild(_power);
         row.AddChild(_people);
@@ -168,6 +187,10 @@ public partial class Hud : CanvasLayer
             speeds.AddChild(button);
             _speedButtons.Add(button);
         }
+
+        var budget = new Button { Text = Strings.BudgetButton, FocusMode = Control.FocusModeEnum.None };
+        budget.Pressed += () => _budget.Visible = !_budget.Visible;
+        row.AddChild(budget);
 
         var menu = new Button { Text = Strings.MenuButton, FocusMode = Control.FocusModeEnum.None };
         menu.Pressed += _shell.OpenPause;
@@ -217,6 +240,92 @@ public partial class Hud : CanvasLayer
         row.AddChild(_tile);
         row.AddChild(_quote);
         row.AddChild(_message);
+    }
+
+    // Last month's money on the right of the screen, and the three tax rates.
+    private void BuildBudgetPanel()
+    {
+        var panel = Panel(Control.LayoutPreset.CenterRight);
+        _budget = panel;
+        panel.VisibilityChanged += () => { if (panel.Visible) panel.ResetSize(); };
+        var column = new VBoxContainer { CustomMinimumSize = new Vector2(230, 0) };
+        column.AddThemeConstantOverride("separation", 4);
+        panel.AddChild(column);
+        column.AddChild(new Label { Text = Strings.BudgetHeading, HorizontalAlignment = HorizontalAlignment.Center });
+        _budgetNote = new Label { Text = Strings.BudgetNotYet, Modulate = Dim, HorizontalAlignment = HorizontalAlignment.Center };
+        column.AddChild(_budgetNote);
+
+        var grid = new GridContainer { Columns = 2 };
+        grid.AddThemeConstantOverride("h_separation", 16);
+        column.AddChild(grid);
+        void Line(string key, string name, Color? color = null)
+        {
+            var label = new Label { Text = name, Modulate = color ?? Colors.White, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            grid.AddChild(label);
+            var value = new Label { HorizontalAlignment = HorizontalAlignment.Right, CustomMinimumSize = new Vector2(80, 0), Modulate = color ?? Colors.White };
+            grid.AddChild(value);
+            value.VisibilityChanged += () => label.Visible = value.Visible;
+            _budgetValues[key] = value;
+        }
+        Line("taxHeading", Strings.BudgetIncome, Dim);
+        foreach (var zone in Zones) Line(zone.ToString(), Strings.ZoneName(zone));
+        Line("income", Strings.BudgetTotal, Dim);
+        Line("upkeepHeading", Strings.BudgetUpkeep, Dim);
+        Line("roads", Strings.BudgetRoads);
+        Line("lines", Strings.BudgetPowerLines);
+        Line("plants", Strings.BudgetPlants);
+        Line("zones", Strings.BudgetZones);
+        Line("expenses", Strings.BudgetTotal, Dim);
+        Line("net", Strings.BudgetNet);
+
+        column.AddChild(new HSeparator());
+        column.AddChild(new Label { Text = Strings.TaxHeading, HorizontalAlignment = HorizontalAlignment.Center });
+        var taxes = new GridContainer { Columns = 4, TooltipText = Strings.TaxTip(_city.Sim.Growth.NeutralTax) };
+        taxes.AddThemeConstantOverride("h_separation", 8);
+        column.AddChild(taxes);
+        foreach (var zone in Zones)
+        {
+            var z = zone;
+            taxes.AddChild(new Label { Text = Strings.ZoneName(zone), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+            var down = new Button { Text = Strings.TaxDown, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(28, 0) };
+            down.Pressed += () => _city.ChangeTax(z, -1);
+            taxes.AddChild(down);
+            var rate = new Label { HorizontalAlignment = HorizontalAlignment.Center, CustomMinimumSize = new Vector2(40, 0) };
+            taxes.AddChild(rate);
+            _taxLabels[zone] = rate;
+            var up = new Button { Text = Strings.TaxUp, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(28, 0) };
+            up.Pressed += () => _city.ChangeTax(z, +1);
+            taxes.AddChild(up);
+        }
+    }
+
+    private static readonly ZoneKind[] Zones = [ZoneKind.Residential, ZoneKind.Commercial, ZoneKind.Industrial];
+
+    private void UpdateBudgetPanel(Simulation sim)
+    {
+        var b = sim.LastBudget ?? default;
+        bool noteWas = _budgetNote.Visible, zonesWere = _budgetValues["zones"].Visible;
+        foreach (var zone in Zones) _budgetValues[zone.ToString()].Text = Strings.Money(b.TaxFor(zone));
+        _budgetValues["taxHeading"].Text = "";
+        _budgetValues["upkeepHeading"].Text = "";
+        _budgetValues["income"].Text = Strings.Money(b.Income);
+        _budgetValues["roads"].Text = Strings.Money(b.RoadUpkeep);
+        _budgetValues["lines"].Text = Strings.Money(b.PowerLineUpkeep);
+        _budgetValues["plants"].Text = Strings.Money(b.PlantUpkeep);
+        _budgetValues["zones"].Text = Strings.Money(b.ZoneUpkeep);
+        _budgetValues["zones"].Visible = b.ZoneUpkeep != 0; // only content that gives zones upkeep
+        _budgetNote.Visible = sim.LastBudget is null;
+        // A panel keeps its size when its contents shrink; shrink it to fit again.
+        if (noteWas != _budgetNote.Visible || zonesWere != _budgetValues["zones"].Visible) _budget.ResetSize();
+        _budgetValues["expenses"].Text = Strings.Money(b.Expenses);
+        _budgetValues["net"].Text = Strings.Signed(b.Net);
+        _budgetValues["net"].Modulate = b.Net < 0 ? Problem : Good;
+        foreach (var zone in Zones)
+        {
+            int rate = _city.TaxShown(zone);
+            _taxLabels[zone].Text = Strings.TaxRate(rate);
+            _taxLabels[zone].Modulate = rate > sim.Growth.NeutralTax ? Warning : rate < sim.Growth.NeutralTax ? Good : Colors.White;
+        }
     }
 
     private static ImageTexture Swatch(Color color)

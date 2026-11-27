@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using SprawlWerk.Sim;
+using SprawlWerk.Sim.Content;
 
 namespace SprawlWerk;
 
@@ -19,6 +20,7 @@ namespace SprawlWerk;
 /// resumes. The city autosaves once a month into one slot (see <see cref="Autosave"/>).
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// Each tick's commands make one sound: the last one's (see <see cref="AudioDirector"/>).
+/// Tax changes from the budget panel are commands too (<see cref="ChangeTax"/>).
 /// </summary>
 public partial class CityController : Node
 {
@@ -35,6 +37,7 @@ public partial class CityController : Node
     private Vector2I? _dragStart;
     private string _lastRefusal = "";
     private string _notice = "";
+    private readonly Dictionary<ZoneKind, int> _pendingTax = new();
 
     /// <summary>A different city was put in place (new, loaded): views recentre their cameras.</summary>
     public event Action? CityReplaced;
@@ -174,12 +177,28 @@ public partial class CityController : Node
         _sim.Enqueue(Drag.Command(_tool, from.X, from.Y, to.X, to.Y));
     }
 
+    // --- taxes ---
+
+    /// <summary>The rate to show for a zone: one asked for but not applied yet (paused), else the city's.</summary>
+    public int TaxShown(ZoneKind zone) => _pendingTax.TryGetValue(zone, out int rate) ? rate : _sim.Taxes.For(zone);
+
+    /// <summary>Ask for a zone's rate one step up or down; sent as a command, clamped to the allowed range.</summary>
+    public void ChangeTax(ZoneKind zone, int step)
+    {
+        int rate = Mathf.Clamp(TaxShown(zone) + step, BudgetRules.MinTax, BudgetRules.MaxTax);
+        if (rate == TaxShown(zone)) return;
+        _pendingTax[zone] = rate;
+        _sim.Enqueue(new SetTaxCommand(zone, rate));
+    }
+
     // Re-sent areas that are already built are not worth showing; only real problems are.
     private void NoteOutcomes()
     {
         Sfx? sound = null;
         foreach (var outcome in _sim.LastOutcomes)
         {
+            if (outcome.Command is SetTaxCommand tax && _pendingTax.TryGetValue(tax.Zone, out int asked) && asked == tax.Rate)
+                _pendingTax.Remove(tax.Zone);
             if (outcome.Result.Refusal is Refusal.NothingToChange) continue;
             sound = SoundFor(outcome);
             if (outcome.Result.Accepted) continue;
@@ -191,6 +210,7 @@ public partial class CityController : Node
     private static Sfx SoundFor(CommandOutcome outcome) => outcome switch
     {
         { Result.Accepted: false } => Sfx.Refused,
+        { Command: SetTaxCommand } => Sfx.UiClick,
         { Command: BulldozeCommand } => Sfx.Bulldoze,
         { Command: PlaceCommand { Kind: TileKind.Empty } } => Sfx.Bulldoze,
         { Command: PlaceCommand { Kind: TileKind.PowerPlant } } => Sfx.PlaceBuilding,
@@ -202,6 +222,7 @@ public partial class CityController : Node
         Refusal.InsufficientFunds => Strings.NeedsFunds(r.Cost),
         Refusal.NothingToChange => Strings.AlreadyBuilt,
         Refusal.OutOfBounds => Strings.OffTheMap,
+        Refusal.OutOfRange => Strings.OutOfRange,
         _ => r.Refusal.ToString(),
     };
 
@@ -216,6 +237,7 @@ public partial class CityController : Node
     private void Replace(Simulation sim, bool seedDemo)
     {
         _sim = sim;
+        _pendingTax.Clear();
         if (seedDemo) SeedDemoCity();
         _sim.Step();
         _tickAccumulator = 0;
@@ -234,6 +256,7 @@ public partial class CityController : Node
     public void LoadFromJson(string json)
     {
         _sim = SaveGame.Deserialize(json, content: GameContent.Content);
+        _pendingTax.Clear();
         _tickAccumulator = 0;
         _dragStart = null;
         _lastRefusal = "";

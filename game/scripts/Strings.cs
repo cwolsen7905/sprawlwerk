@@ -1,4 +1,5 @@
 using SprawlWerk.Sim;
+using SprawlWerk.Sim.Content;
 
 namespace SprawlWerk;
 
@@ -45,12 +46,41 @@ public static class Strings
     public const string VolumeAmbience = "Ambience";
     public const string AlreadyBuilt = "already built";
     public const string OffTheMap = "off the map";
+    public const string OutOfRange = "out of range";
 
     public const string MenuButton = "Menu";
     public const string PauseButton = "||";
     public const string ToolsHeading = "Build";
     public static string Speed(int multiplier) => $"{multiplier}x";
-    public static string Funds(long funds) => $"${funds:N0}";
+    public static string Funds(long funds) => funds < 0 ? $"-${-funds:N0}" : $"${funds:N0}";
+
+    // --- budget ---
+    public const string BudgetButton = "Budget";
+    public const string BudgetHeading = "Budget, last month";
+    public const string BudgetNotYet = "Settled when a month ends";
+    public const string BudgetIncome = "Taxes";
+    public const string BudgetUpkeep = "Upkeep";
+    public const string BudgetRoads = "Roads";
+    public const string BudgetPowerLines = "Power lines";
+    public const string BudgetPlants = "Power plants";
+    public const string BudgetZones = "Zones";
+    public const string BudgetTotal = "Total";
+    public const string BudgetNet = "Net";
+    public const string TaxHeading = "Tax rates";
+    public const string TaxDown = "-";
+    public const string TaxUp = "+";
+    public static string TaxRate(int rate) => $"{rate}%";
+    public static string TaxTip(int neutral) => $"Above {neutral}% lowers the zone's demand; below raises it";
+    public static string Money(long amount) => Funds(amount);
+    public static string Signed(long amount) => amount < 0 ? $"-${-amount:N0}" : $"+${amount:N0}";
+    public static string MonthlyNet(long net) => $"{Signed(net)} / month";
+
+    public static string ZoneName(ZoneKind zone) => zone switch
+    {
+        ZoneKind.Residential => "Residential",
+        ZoneKind.Commercial => "Commercial",
+        _ => "Industrial",
+    };
     public static string Power(long demand, long supply) => $"Power {demand} / {supply}";
     public static string People(int residents, int jobs) => $"Residents {residents:N0}   Jobs {jobs:N0}";
     public static string DemandBars(int r, int c, int i) => $"Demand  R {Bar(r)}  C {Bar(c)}  I {Bar(i)}";
