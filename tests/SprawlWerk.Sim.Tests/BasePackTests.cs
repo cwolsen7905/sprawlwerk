@@ -5,24 +5,7 @@ namespace SprawlWerk.Sim.Tests;
 /// <summary>The base pack the game ships, read from <c>game/content/base</c>.</summary>
 public class BasePackTests
 {
-    private static PackSource ReadBasePack()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "SprawlWerk.sln"))) dir = dir.Parent;
-        Assert.NotNull(dir);
-        var root = Path.Combine(dir.FullName, "game", "content", "base");
-        SourceFile Read(string path) => new(Path.GetRelativePath(root, path), File.ReadAllText(path));
-        return new PackSource(
-            Read(Path.Combine(root, "pack.json")),
-            Directory.GetFiles(Path.Combine(root, "types"), "*.sim.json").Select(Read).ToArray());
-    }
-
-    private static ContentSet Load()
-    {
-        var result = ContentLoader.Load([ReadBasePack()]);
-        Assert.True(result.Succeeded, string.Join("\n", result.Errors));
-        return result.Content!;
-    }
+    private static ContentSet Load() => TestContent.Load();
 
     [Fact]
     public void The_base_pack_loads_and_declares_a_licence()

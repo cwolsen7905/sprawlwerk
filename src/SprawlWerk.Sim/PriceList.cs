@@ -1,8 +1,12 @@
+using SprawlWerk.Sim.Content;
+
 namespace SprawlWerk.Sim;
 
 /// <summary>
-/// What building and clearing cost, per tile. The defaults are placeholders
-/// until building types move into data files that mods can change.
+/// What building and clearing cost, per tile. <see cref="FromContent"/> takes
+/// build prices from the loaded content types; <see cref="Default"/> holds the
+/// same placeholder numbers in code. Clearing and the line crossing fee are not
+/// content yet (crossings become data with the network rules, ADR 0011).
 /// </summary>
 public sealed class PriceList
 {
@@ -31,6 +35,25 @@ public sealed class PriceList
     /// <summary>Cost to make one tile this kind. Empty is free here; clearing costs <see cref="Demolish"/>.</summary>
     public long Build(TileKind kind) => _build[(int)kind];
 
+    /// <summary>Default demolish price per tile, until it is content.</summary>
+    public const long DefaultDemolish = 2;
+
+    /// <summary>Default fee where a line crosses a road, until crossings are content.</summary>
+    public const long DefaultLineCrossing = 12;
+
+    /// <summary>
+    /// Build prices from content: each kind costs its type's <c>cost</c>; a road
+    /// carrying a line placed outright costs a road plus a line.
+    /// </summary>
+    public static PriceList FromContent(ContentSet content, long demolish = DefaultDemolish, long lineCrossing = DefaultLineCrossing)
+    {
+        var build = new Dictionary<TileKind, long>();
+        foreach (var kind in Enum.GetValues<TileKind>())
+            if (KindIds.IdFor(kind) is not null) build[kind] = KindIds.TypeFor(content, kind).Cost;
+        build[TileKind.RoadWithLine] = build[TileKind.Road] + build[TileKind.PowerLine];
+        return new PriceList(build, demolish, lineCrossing);
+    }
+
     public static PriceList Default { get; } = new(
         new Dictionary<TileKind, long>
         {
@@ -42,6 +65,6 @@ public sealed class PriceList
             [TileKind.PowerPlant] = 4000,
             [TileKind.RoadWithLine] = 23, // a road plus a line, when placed outright
         },
-        demolish: 2,
-        lineCrossing: 12);
+        demolish: DefaultDemolish,
+        lineCrossing: DefaultLineCrossing);
 }

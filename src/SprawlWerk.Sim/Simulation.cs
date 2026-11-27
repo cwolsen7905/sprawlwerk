@@ -1,3 +1,5 @@
+using SprawlWerk.Sim.Content;
+
 namespace SprawlWerk.Sim;
 
 /// <summary>
@@ -35,13 +37,22 @@ public sealed class Simulation
     /// <summary>Every command applied or refused in the last <see cref="Step"/>, in order.</summary>
     public IReadOnlyList<CommandOutcome> LastOutcomes => _lastOutcomes;
 
-    public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null, PowerRules? power = null)
+    /// <summary>
+    /// The content packs this city runs on, or null for the built-in placeholder
+    /// numbers. With content, prices and power rules come from its types unless
+    /// passed in explicitly.
+    /// </summary>
+    public ContentSet? Content { get; }
+
+    public Simulation(int width, int height, long startingFunds = DefaultStartingFunds, PriceList? prices = null,
+        PowerRules? power = null, ContentSet? content = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(startingFunds);
+        Content = content;
         Map = new CityMap(width, height);
-        Power = new PowerGrid(width, height, power);
+        Power = new PowerGrid(width, height, power ?? (content is null ? null : PowerRules.FromContent(content)));
         Funds = startingFunds;
-        Prices = prices ?? PriceList.Default;
+        Prices = prices ?? (content is null ? PriceList.Default : PriceList.FromContent(content));
     }
 
     /// <summary>Set the clock and rebuild derived state after a load; the map is already filled in.</summary>

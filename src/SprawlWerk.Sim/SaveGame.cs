@@ -101,7 +101,7 @@ public static class SaveGame
         }
     }
 
-    public static Simulation Deserialize(string json, PriceList? prices = null, PowerRules? power = null)
+    public static Simulation Deserialize(string json, PriceList? prices = null, PowerRules? power = null, Content.ContentSet? content = null)
     {
         var data = Upgrade(Parse(json));
 
@@ -111,7 +111,7 @@ public static class SaveGame
         if (data.Kinds is null || data.Kinds.Length != data.Height) throw new SaveFormatException("the tile rows do not match the map height");
         if (data.Heights is null || data.Heights.Length != data.Height) throw new SaveFormatException("the height rows do not match the map height");
 
-        var sim = new Simulation(data.Width, data.Height, data.Funds, prices, power);
+        var sim = new Simulation(data.Width, data.Height, data.Funds, prices, power, content);
         for (int y = 0; y < data.Height; y++)
         {
             if (data.Kinds[y] is not { } row || row.Length != data.Width)
