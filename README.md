@@ -57,6 +57,7 @@ speed (1x, 2x, 4x).
 - Versioned JSON saves, written atomically; monthly autosave and Continue on the title menu; a loaded city continues exactly as the saved one would
 - A calendar derived from ticks, pause and three speeds
 - Isometric debug view in Godot with tile picking
+- Music, city ambience and sound effects, with volume sliders on the pause menu
 
 ## Contributing
 
@@ -67,3 +68,7 @@ a pull request. CI runs the simulation tests on every push.
 ## License
 
 BSD 3-Clause. See [LICENSE](LICENSE).
+
+Third-party music, sounds and other assets keep their own licences (CC0 or
+CC-BY); each file is listed with its source and licence in
+[ASSETS.md](ASSETS.md).

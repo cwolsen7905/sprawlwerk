@@ -10,6 +10,7 @@ namespace SprawlWerk;
 /// <see cref="SaveBrowser"/>. Escape cancels a drag first; otherwise
 /// it opens or closes the pause overlay. While a menu is up the city view
 /// is inactive, so no time passes and clicks do not reach the map.
+/// The pause overlay also holds the volume sliders (<see cref="AudioDirector"/>).
 /// Built in code so the scene stays small; a settings screen comes later.
 /// </summary>
 public partial class ShellMenu : CanvasLayer
@@ -35,6 +36,12 @@ public partial class ShellMenu : CanvasLayer
             (Strings.MenuResume, Resume),
             (Strings.MenuSave, () => OpenBrowser(SaveBrowser.BrowserMode.Save, _pause)),
             (Strings.MenuQuit, Quit));
+        if (AudioDirector.Instance is { } audio && _pause.FindChild("Box", true, false) is Control pauseBox)
+        {
+            var volume = audio.BuildVolumeControls();
+            pauseBox.AddChild(volume);
+            pauseBox.MoveChild(volume, pauseBox.GetChildCount() - 2); // above the status line
+        }
         _continue = _title.FindChild(Strings.MenuContinue, true, false) as Button ?? throw new System.InvalidOperationException("no Continue button");
         _titleStatus = _title.FindChild("Status", true, false) as Label ?? throw new System.InvalidOperationException("no status label");
         _browser = new SaveBrowser(_city);
@@ -116,6 +123,13 @@ public partial class ShellMenu : CanvasLayer
     // Only one panel at a time; none means the game is running.
     private void ShowPanel(Control? panel)
     {
+        bool pauseWasOpen = _pause.Visible;
+        if (AudioDirector.Instance is { } audio)
+        {
+            if (panel == _pause && !pauseWasOpen) audio.Play(Sfx.UiOpen);
+            else if (panel is null && pauseWasOpen) audio.Play(Sfx.UiClose);
+            audio.SetCityAmbience(panel is null);
+        }
         _title.Visible = panel == _title;
         _pause.Visible = panel == _pause;
         _city.Active = panel is null;
@@ -135,7 +149,7 @@ public partial class ShellMenu : CanvasLayer
         center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(center);
 
-        var box = new VBoxContainer { CustomMinimumSize = new Vector2(220, 0) };
+        var box = new VBoxContainer { Name = "Box", CustomMinimumSize = new Vector2(220, 0) };
         box.AddThemeConstantOverride("separation", 10);
         center.AddChild(box);
 

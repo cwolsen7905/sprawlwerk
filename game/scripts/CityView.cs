@@ -19,6 +19,7 @@ namespace SprawlWerk;
 /// F5 quick-saves and F9 quick-loads one slot; named saves go through the shell menu's save browser.
 /// While <see cref="Active"/> is false (a menu is up) time stands still and input is ignored.
 /// The HUD shows funds, what the hovered tile would cost, and the last refusal.
+/// Each tick's commands make one sound: the last one's (see <see cref="AudioDirector"/>).
 /// </summary>
 public partial class CityView : Node2D
 {
@@ -80,6 +81,7 @@ public partial class CityView : Node2D
         if (SaveStore.WriteAtomic(QuickSavePath, SaveToJson()) is { } problem) { _lastRefusal = problem; return; }
         _lastRefusal = "";
         _notice = Strings.Saved;
+        AudioDirector.Instance?.Play(Sfx.Confirm);
     }
 
     private void QuickLoad()
@@ -229,12 +231,25 @@ public partial class CityView : Node2D
     // Re-sent areas that are already built are not worth showing; only real problems are.
     private void NoteRefusals()
     {
+        Sfx? sound = null;
         foreach (var outcome in _sim.LastOutcomes)
         {
-            if (outcome.Result.Refusal is Refusal.None or Refusal.NothingToChange) continue;
+            if (outcome.Result.Refusal is Refusal.NothingToChange) continue;
+            sound = SoundFor(outcome);
+            if (outcome.Result.Accepted) continue;
             _lastRefusal = Strings.Refused(Describe(outcome.Result));
         }
+        if (sound is { } s) AudioDirector.Instance?.Play(s);
     }
+
+    private static Sfx SoundFor(CommandOutcome outcome) => outcome switch
+    {
+        { Result.Accepted: false } => Sfx.Refused,
+        { Command: BulldozeCommand } => Sfx.Bulldoze,
+        { Command: PlaceCommand { Kind: TileKind.Empty } } => Sfx.Bulldoze,
+        { Command: PlaceCommand { Kind: TileKind.PowerPlant } } => Sfx.PlaceBuilding,
+        _ => Sfx.Place,
+    };
 
     private static string Describe(CommandResult r) => r.Refusal switch
     {

@@ -39,6 +39,9 @@ public static class Strings
     public static string SaveLine(string name, string date, long tick) => $"{name}  -  {date}  -  {tick} ticks";
     public static string SaveUnreadable(string name, string why) => $"{name}  -  unreadable: {why}";
     public const string Paused = "PAUSED";
+    public const string VolumeMusic = "Music";
+    public const string VolumeEffects = "Effects";
+    public const string VolumeAmbience = "Ambience";
     public const string AlreadyBuilt = "already built";
     public const string OffTheMap = "off the map";
 
