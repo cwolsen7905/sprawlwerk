@@ -60,9 +60,8 @@ speed (1x, 2x, 4x).
 
 ## Contributing
 
-Early days; issues and ideas are welcome. Planned work is in
-[docs/backlog.md](docs/backlog.md). Run `dotnet test` before opening
-a pull request. CI runs the simulation tests on every push.
+Early days; issues and ideas are welcome. Run `dotnet test` before
+opening a pull request. CI runs the simulation tests on every push.
 
 ## License
 
